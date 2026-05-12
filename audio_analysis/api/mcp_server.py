@@ -211,7 +211,7 @@ if MCP_AVAILABLE:
                         "duration_seconds": float(row.get('duration', 0)),
                         "duration_minutes": float(row.get('duration', 0)) / 60,
                         "tempo_bpm": float(row.get('tempo', 0)),
-                        "detected_key": str(row.get('key', row.get('detected_key', 'unknown'))),
+                        "key": str(row.get('key', row.get('detected_key', 'unknown'))),
                         "energy_level": float(row.get('rms_mean', 0)),
                         "spectral_brightness_hz": float(row.get('spectral_centroid_mean', 0))
                     }
