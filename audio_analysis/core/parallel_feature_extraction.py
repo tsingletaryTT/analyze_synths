@@ -351,35 +351,31 @@ class ParallelFeatureExtractor:
     
     def _extract_features_vectorized(self, batch: AudioBatch, tensor_data: Dict[str, np.ndarray]) -> List[Dict[str, Any]]:
         """
-        Extract features using vectorized operations optimized for tensor processing.
-        
-        This method is designed for future hardware acceleration where
-        batch operations can be performed efficiently on tensor cores.
-        
-        Args:
-            batch: Original AudioBatch
-            tensor_data: Tensor-formatted data
-            
-        Returns:
-            List of feature dictionaries
+        Extract features using TT hardware when device='tenstorrent',
+        otherwise fall back to per-file librosa extraction.
         """
-        features_list = []
-        
-        # Extract features for each file in the batch
-        for i in range(batch.batch_size):
-            audio_data = batch.audio_data[i]
-            sample_rate = batch.sample_rates[i]
-            file_path = batch.file_paths[i]
-            duration = batch.durations[i]
-            
-            # For now, process individually but structure for future vectorization
-            features = self._extract_single_file_features(
-                audio_data, sample_rate, file_path, duration
+        if self.config.device == 'tenstorrent':
+            from .tensor_operations import TenstorrentTensorProcessor  # noqa: PLC0415
+
+            processor = TenstorrentTensorProcessor()
+            return processor.compute_features(
+                tensor_data['audio_tensor'],
+                tensor_data['lengths'],
+                tensor_data['sample_rates'],
+                batch.file_paths,
             )
-            
+
+        # CPU fallback — original per-file path
+        features_list = []
+        for i in range(batch.batch_size):
+            features = self._extract_single_file_features(
+                batch.audio_data[i],
+                batch.sample_rates[i],
+                batch.file_paths[i],
+                batch.durations[i],
+            )
             if features:
                 features_list.append(features)
-        
         return features_list
     
     def _extract_single_file_features(self, audio_data: np.ndarray, sample_rate: int, 

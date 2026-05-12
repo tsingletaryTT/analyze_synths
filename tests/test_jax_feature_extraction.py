@@ -217,3 +217,27 @@ def test_tenstorrent_processor_cluster_features():
 
     assert labels.shape == (15,)
     assert centers.shape == (3, 8)
+
+
+def test_parallel_feature_extractor_uses_tt_path():
+    """ParallelFeatureExtractor routes to TT when device='tenstorrent'."""
+    from audio_analysis.core.parallel_feature_extraction import (
+        ParallelFeatureExtractor, ProcessingConfig, AudioBatch,
+    )
+
+    sr = 22050
+    config = ProcessingConfig(device='tenstorrent', use_multiprocessing=False)
+    extractor = ParallelFeatureExtractor(config)
+
+    audio = _make_sine_wave(440.0, 2.0, sr)
+    batch = AudioBatch(
+        audio_data=[audio],
+        sample_rates=[sr],
+        file_paths=[Path('test.wav')],
+        durations=[2.0],
+    )
+    tensor_data = batch.to_tensor_format()
+    result = extractor._extract_features_vectorized(batch, tensor_data)
+
+    assert len(result) == 1
+    assert 'spectral_centroid_mean' in result[0]
