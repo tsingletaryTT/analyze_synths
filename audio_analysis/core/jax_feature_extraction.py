@@ -49,9 +49,11 @@ _FILTER_CACHE: Dict[Tuple, Dict[str, Any]] = {}
 # Chromatic pitch class names matching feature_extraction_base.py
 _MUSICAL_KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
-# Librosa-compatible tonnetz transform matrix (12x6 float32).
+# Tonnetz transform matrix (12x6 float32).
 # Projects 12-dimensional chroma to 6 tonal centroid dimensions
 # (perfect fifth, minor third, major third, each as sin/cos pair).
+# Normalised by 1/sqrt(6) to match librosa's tonnetz implementation — without
+# this factor the exported values are ~2.45x larger than librosa's output.
 _TONNETZ_TRANSFORM = np.array([
     [1,  0, -1,  0,  1,  0, -1,  0,  1,  0, -1,  0],   # fifth cos
     [0,  1,  0, -1,  0,  1,  0, -1,  0,  1,  0, -1],   # fifth sin
@@ -59,7 +61,8 @@ _TONNETZ_TRANSFORM = np.array([
     [0,  1,  1,  0,  0, -1, -1,  0,  0,  1,  1,  0],   # minor third sin
     [1,  1, -1, -1,  1,  1, -1, -1,  1,  1, -1, -1],   # major third cos
     [0,  0,  0,  0,  1,  1,  1,  1, -1, -1, -1, -1],   # major third sin
-], dtype=np.float32).T  # shape (12, 6)
+]) / np.sqrt(6)
+_TONNETZ_TRANSFORM = _TONNETZ_TRANSFORM.T.astype(np.float32)  # shape (12, 6)
 
 
 def _build_mel_filterbank(sr: int, n_fft: int, n_mels: int) -> np.ndarray:
@@ -166,14 +169,14 @@ class JaxAudioFeatureExtractor:
         hop_length: int = 512,
         n_mels: int = 128,
         n_mfcc: int = 13,
-        n_chroma: int = 12,
     ):
+        # Note: 12-bin chroma (one bin per Western pitch class C–B) is the only
+        # supported configuration and is hardcoded throughout the pipeline.
         self.sr = sr
         self.n_fft = n_fft
         self.hop_length = hop_length
         self.n_mels = n_mels
         self.n_mfcc = n_mfcc
-        self.n_chroma = n_chroma
         self.n_freqs = n_fft // 2 + 1
 
         cache_key = (sr, n_fft, n_mels, n_mfcc)
@@ -222,7 +225,8 @@ class JaxAudioFeatureExtractor:
                 tempo, beats = librosa.beat.beat_track(y=y, sr=self.sr)
                 tempo_val = float(tempo.item()) if hasattr(tempo, 'item') else float(tempo)
                 onset_density = float(len(beats) / (len(y) / self.sr)) if len(y) > 0 else 0.0
-            except Exception:
+            except Exception as exc:
+                logger.debug("beat_track failed for %s: %s", file_paths[i], exc)
                 tempo_val = 0.0
                 onset_density = 0.0
             results.append({
@@ -258,7 +262,8 @@ class JaxAudioFeatureExtractor:
             )
 
         B = audio_batch.shape[0]
-        assert len(file_paths) == B, f"Batch size mismatch: {B} vs {len(file_paths)}"
+        if len(file_paths) != B:
+            raise ValueError(f"file_paths length {len(file_paths)} != batch size {B}")
 
         max_len = audio_batch.shape[1]
         n_frames = max(1, (max_len - self.n_fft) // self.hop_length + 1)
@@ -371,8 +376,10 @@ class JaxAudioFeatureExtractor:
             # valid frames — a proxy for spectral irregularity.  High values
             # indicate rough or noisy timbres; low values indicate smooth/tonal spectra.
             # spec shape is (n_frames, n_freqs); diff along axis=-1 gives (n_frames, n_freqs-1).
+            # Weighted by valid_mask so zero-padded frames don't underestimate roughness
+            # for shorter files (consistent with all other aggregate statistics above).
             spec_diff = jnp.abs(jnp.diff(mag, axis=-1))           # (n_frames, n_freqs-1)
-            spectral_roughness = jnp.mean(spec_diff)               # scalar
+            spectral_roughness = jnp.sum(spec_diff * valid_mask[:, None]) / (n_valid * (self.n_freqs - 1))
 
             return (
                 centroid_mean, centroid_std,

@@ -74,6 +74,7 @@ def _detect_tt_device() -> str:
         return 'cpu'
     try:
         _activate_tt_pjrt()
+        # Probe once at import so DEFAULT_DEVICE is a consistent module-level constant
         devices = jax.devices()
         if any(d.platform == 'tt' for d in devices):
             tt_count = sum(1 for d in devices if d.platform == 'tt')

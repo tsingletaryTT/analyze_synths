@@ -237,9 +237,12 @@ def test_parity_with_librosa_baseline():
                                           normalises each chroma frame to unit norm
     - tonnetz_*                         — tonnetz is derived from chroma, so the
                                           same normalisation difference propagates
-    - rms_*                             — librosa computes RMS per frame; JAX
-                                          computes global RMS over the padded batch
-                                          array, giving ~35% difference on short clips
+    - rms_*                             — librosa.feature.rms computes RMS on raw
+                                          (unwindowed) signal frames; the JAX path
+                                          applies a Hann window before computing RMS,
+                                          which attenuates signal energy by ~0.612x
+                                          (the RMS of a Hann window), giving ~38%
+                                          difference in rms_mean and ~65% in rms_std
     """
     from audio_analysis.core.jax_feature_extraction import JaxAudioFeatureExtractor
     from audio_analysis.core.feature_extraction_base import FeatureExtractionCore
