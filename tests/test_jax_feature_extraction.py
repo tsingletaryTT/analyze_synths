@@ -51,3 +51,91 @@ def test_processing_config_tt_forces_sample_rate():
     from audio_analysis.core.parallel_feature_extraction import ProcessingConfig
     config = ProcessingConfig(device='tenstorrent')
     assert config.sample_rate == 22050
+
+
+def test_extract_batch_returns_correct_keys():
+    """extract_batch produces all expected feature keys."""
+    from audio_analysis.core.jax_feature_extraction import JaxAudioFeatureExtractor
+
+    sr = 22050
+    audio = _make_sine_wave(440.0, 3.0, sr)
+    batch = audio[np.newaxis, :]
+    lengths = np.array([len(audio)], dtype=np.int32)
+
+    ex = JaxAudioFeatureExtractor(sr=sr)
+    features = ex.extract_batch(batch, lengths, sr, [Path('test.wav')])
+
+    assert len(features) == 1
+    f = features[0]
+
+    required_keys = [
+        'filename', 'spectral_centroid_mean', 'spectral_centroid_std',
+        'spectral_rolloff_mean', 'spectral_bandwidth_mean', 'zero_crossing_rate_mean',
+        'rms_mean', 'rms_std',
+        'mfcc_1_mean', 'mfcc_1_std', 'mfcc_13_mean', 'mfcc_13_std',
+        'chroma_C_mean', 'chroma_B_mean',
+        'detected_key', 'key_confidence',
+        'tonnetz_1_mean', 'tonnetz_6_mean',
+    ]
+    for key in required_keys:
+        assert key in f, f"Missing feature key: {key}"
+
+
+def test_extract_batch_values_are_finite():
+    """All numeric feature values are finite (no NaN or Inf)."""
+    from audio_analysis.core.jax_feature_extraction import JaxAudioFeatureExtractor
+
+    sr = 22050
+    audio = _make_sine_wave(440.0, 3.0, sr)
+    batch = audio[np.newaxis, :]
+    lengths = np.array([len(audio)], dtype=np.int32)
+
+    ex = JaxAudioFeatureExtractor(sr=sr)
+    features = ex.extract_batch(batch, lengths, sr, [Path('test.wav')])[0]
+
+    for k, v in features.items():
+        if isinstance(v, float):
+            assert np.isfinite(v), f"Non-finite value for key '{k}': {v}"
+
+
+def test_extract_batch_spectral_centroid_plausible():
+    """Spectral centroid of a 440 Hz sine wave is close to 440 Hz."""
+    from audio_analysis.core.jax_feature_extraction import JaxAudioFeatureExtractor
+
+    sr = 22050
+    audio = _make_sine_wave(440.0, 3.0, sr)
+    batch = audio[np.newaxis, :]
+    lengths = np.array([len(audio)], dtype=np.int32)
+
+    ex = JaxAudioFeatureExtractor(sr=sr)
+    features = ex.extract_batch(batch, lengths, sr, [Path('test.wav')])[0]
+
+    centroid = features['spectral_centroid_mean']
+    assert abs(centroid - 440.0) / 440.0 < 0.15, (
+        f"Spectral centroid {centroid:.1f} Hz too far from 440 Hz"
+    )
+
+
+def test_extract_batch_multiple_files():
+    """extract_batch handles B > 1 correctly."""
+    from audio_analysis.core.jax_feature_extraction import JaxAudioFeatureExtractor
+
+    sr = 22050
+    a1 = _make_sine_wave(440.0, 2.0, sr)
+    a2 = _make_sine_wave(880.0, 3.0, sr)
+    max_len = max(len(a1), len(a2))
+    batch = np.zeros((2, max_len), dtype=np.float32)
+    batch[0, :len(a1)] = a1
+    batch[1, :len(a2)] = a2
+    lengths = np.array([len(a1), len(a2)], dtype=np.int32)
+
+    ex = JaxAudioFeatureExtractor(sr=sr)
+    features = ex.extract_batch(batch, lengths, sr,
+                                [Path('a.wav'), Path('b.wav')])
+
+    assert len(features) == 2
+    assert features[0]['filename'] == 'a.wav'
+    assert features[1]['filename'] == 'b.wav'
+    assert features[1]['spectral_centroid_mean'] > features[0]['spectral_centroid_mean'], (
+        "880 Hz sine should have higher centroid than 440 Hz"
+    )

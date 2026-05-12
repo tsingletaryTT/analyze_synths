@@ -18,7 +18,24 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+# Activate PJRT plugin before importing JAX so TT devices are visible.
+# Only sets the env var if it's not already set by the environment.
+_plugin_path = os.path.expanduser('~/tt-xla/build/lib/libpjrt_tt.so')
+if os.path.exists(_plugin_path) and 'PJRT_PLUGIN_LIBRARY_PATH' not in os.environ:
+    os.environ['PJRT_PLUGIN_LIBRARY_PATH'] = _plugin_path
+
+try:
+    import jax
+    import jax.numpy as jnp
+    from jax import vmap
+    _JAX_AVAILABLE = True
+except ImportError:
+    _JAX_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+if not _JAX_AVAILABLE:
+    logger.warning("JAX not available — JaxAudioFeatureExtractor will raise on use")
 
 # Module-level filter cache: (sr, n_fft, n_mels, n_mfcc) -> filter arrays
 _FILTER_CACHE: Dict[Tuple, Dict[str, Any]] = {}
@@ -187,16 +204,191 @@ class JaxAudioFeatureExtractor:
         file_paths: List[Path],
     ) -> List[Dict[str, Any]]:
         """
-        Extract audio features for a batch of files.
+        Extract audio features for a batch of files on TT hardware.
 
         Args:
-            audio_batch: (B, max_len) float32, padded with zeros
+            audio_batch: (B, max_len) float32, zero-padded
             lengths: (B,) int32, actual sample count per file
-            sr: sample rate (uniform across batch)
-            file_paths: original file paths for metadata
+            sr: sample rate (uniform across batch; 22050 when device='tenstorrent')
+            file_paths: original file paths for filename metadata
 
         Returns:
             List of feature dicts with same keys as feature_extraction_base.py
         """
-        # Stub — full implementation added in Task 4.
-        return [{'filename': p.name} for p in file_paths]
+        if not _JAX_AVAILABLE:
+            raise RuntimeError(
+                "JAX is not importable in this environment. "
+                "Install jax[cpu] or activate the p300c-xla-test venv."
+            )
+
+        B = audio_batch.shape[0]
+        assert len(file_paths) == B, f"Batch size mismatch: {B} vs {len(file_paths)}"
+
+        max_len = audio_batch.shape[1]
+        n_frames = max(1, (max_len - self.n_fft) // self.hop_length + 1)
+
+        # Build frame index tensor: (n_frames, n_fft)
+        frame_starts = np.arange(n_frames) * self.hop_length
+        frame_indices = frame_starts[:, None] + np.arange(self.n_fft)[None, :]
+        # Clip to max_len so we never index out of bounds on padded audio
+        frame_indices = np.clip(frame_indices, 0, max_len - 1)
+
+        # Boolean mask: True for frames whose start sample falls within the
+        # actual (non-padded) signal.  Shape: (n_frames,).
+        # Stored as float32 (1.0 / 0.0) per file so vmap can take it as
+        # a per-sample argument.
+        frame_valid_masks = (frame_starts[None, :] < lengths[:, None]).astype(np.float32)
+        # shape: (B, n_frames)
+
+        # Move static arrays to JAX once
+        jdft_cos  = jnp.array(self.dft_cos)          # (n_freqs, n_fft)
+        jdft_sin  = jnp.array(self.dft_sin)          # (n_freqs, n_fft)
+        jmel      = jnp.array(self.mel_filterbank)   # (n_freqs, n_mels)
+        jdct      = jnp.array(self.dct_matrix)       # (n_mels, n_mfcc)
+        jchroma   = jnp.array(self.chroma_filter)    # (n_freqs, 12)
+        jtonnetz  = jnp.array(self.tonnetz_transform) # (12, 6)
+        jfreq_hz  = jnp.array(self.freq_hz)          # (n_freqs,)
+        jhann     = jnp.array(self.hann_window)      # (n_fft,)
+        jfi       = jnp.array(frame_indices)         # (n_frames, n_fft)
+
+        jaudio  = jnp.array(audio_batch)             # (B, max_len)
+        jmasks  = jnp.array(frame_valid_masks)       # (B, n_frames)
+
+        def extract_one(audio_1d: jnp.ndarray, valid_mask: jnp.ndarray):
+            """
+            Extract all features for a single audio signal.
+
+            valid_mask: (n_frames,) float32 — 1.0 for valid frames, 0.0 for
+            zero-padded frames beyond the true signal length.  Used as
+            per-frame weights so padding doesn't bias spectral estimates.
+            """
+            # --- Frame + window ---
+            frames = audio_1d[jfi] * jhann           # (n_frames, n_fft)
+
+            # --- DFT via matmul (rfft not supported on TT PJRT) ---
+            real_part = jnp.dot(frames, jdft_cos.T)  # (n_frames, n_freqs)
+            imag_part = jnp.dot(frames, jdft_sin.T)  # (n_frames, n_freqs)
+            mag = jnp.sqrt(real_part ** 2 + imag_part ** 2 + 1e-8)  # (n_frames, n_freqs)
+
+            # Zero-out magnitude for padding frames so they don't bias statistics.
+            # valid_mask[:, None] broadcasts to (n_frames, n_freqs).
+            mag = mag * valid_mask[:, None]
+
+            # Normalised weight per frame: used for weighted mean/std below.
+            # Sum of valid_mask gives count of valid frames (safe: always >= 1).
+            n_valid = jnp.sum(valid_mask) + 1e-8           # scalar
+
+            # --- Spectral features ---
+            mag_sum  = jnp.sum(mag, axis=-1, keepdims=True) + 1e-8
+            mag_norm = mag / mag_sum                 # (n_frames, n_freqs)
+
+            centroid = jnp.sum(mag_norm * jfreq_hz, axis=-1)  # (n_frames,)
+            # Weighted mean and std over valid frames only
+            centroid_mean = jnp.sum(centroid * valid_mask) / n_valid
+            centroid_var  = jnp.sum(((centroid - centroid_mean) ** 2) * valid_mask) / n_valid
+            centroid_std  = jnp.sqrt(centroid_var + 1e-8)
+
+            cumsum = jnp.cumsum(mag, axis=-1)        # (n_frames, n_freqs)
+            total  = cumsum[:, -1:] + 1e-8
+            rolloff_mask = (cumsum >= 0.85 * total).astype(jnp.float32)
+            rolloff_bin  = jnp.argmax(rolloff_mask, axis=-1).astype(jnp.float32)
+            rolloff_hz   = rolloff_bin * (sr / 2.0) / (self.n_freqs - 1)
+            rolloff_mean = jnp.sum(rolloff_hz * valid_mask) / n_valid
+
+            dev       = (jfreq_hz - centroid[:, None]) ** 2        # (n_frames, n_freqs)
+            bandwidth = jnp.sqrt(jnp.sum(mag_norm * dev, axis=-1) + 1e-8)
+            bandwidth_mean = jnp.sum(bandwidth * valid_mask) / n_valid
+
+            # --- ZCR (from frames, valid frames only) ---
+            signs    = jnp.sign(frames)
+            # zcr per frame: mean of abs sign-changes over n_fft-1 transitions
+            zcr_per_frame = jnp.mean(jnp.abs(jnp.diff(signs, axis=-1)), axis=-1) / 2.0
+            zcr_mean = jnp.sum(zcr_per_frame * valid_mask) / n_valid
+
+            # --- RMS (from frames, valid frames only) ---
+            rms      = jnp.sqrt(jnp.mean(frames ** 2, axis=-1))     # (n_frames,)
+            rms_mean = jnp.sum(rms * valid_mask) / n_valid
+            rms_var  = jnp.sum(((rms - rms_mean) ** 2) * valid_mask) / n_valid
+            rms_std  = jnp.sqrt(rms_var + 1e-8)
+
+            # --- MFCC ---
+            mel     = jnp.dot(mag, jmel)             # (n_frames, n_mels)
+            log_mel = jnp.log(mel + 1e-6)
+            mfcc    = jnp.dot(log_mel, jdct)         # (n_frames, n_mfcc)
+            # Weighted mean/std over valid frames
+            mfcc_mean = jnp.sum(mfcc * valid_mask[:, None], axis=0) / n_valid
+            mfcc_var  = jnp.sum(((mfcc - mfcc_mean[None, :]) ** 2) * valid_mask[:, None], axis=0) / n_valid
+            mfcc_std  = jnp.sqrt(mfcc_var + 1e-8)
+
+            # --- Chroma ---
+            chroma      = jnp.dot(mag, jchroma)      # (n_frames, 12)
+            chroma_norm = chroma / (jnp.sum(chroma, axis=-1, keepdims=True) + 1e-6)
+            chroma_mean = jnp.sum(chroma_norm * valid_mask[:, None], axis=0) / n_valid
+            key_index      = jnp.argmax(chroma_mean)
+            key_confidence = jnp.max(chroma_mean)
+
+            # --- Tonnetz ---
+            tonnetz = jnp.dot(chroma_mean, jtonnetz)  # (6,)
+
+            return (
+                centroid_mean, centroid_std,
+                rolloff_mean, bandwidth_mean, zcr_mean,
+                rms_mean, rms_std,
+                mfcc_mean, mfcc_std,
+                chroma_mean,
+                key_index, key_confidence,
+                tonnetz,
+            )
+
+        # vmap over batch dimension (audio signals and their validity masks)
+        results = vmap(extract_one)(jaudio, jmasks)
+
+        (
+            centroid_mean, centroid_std,
+            rolloff_mean, bandwidth_mean, zcr_mean,
+            rms_mean, rms_std,
+            mfcc_mean, mfcc_std,
+            chroma_mean,
+            key_indices, key_confidences,
+            tonnetz,
+        ) = results
+
+        # Pull to numpy in one transfer
+        centroid_mean   = np.array(centroid_mean)
+        centroid_std    = np.array(centroid_std)
+        rolloff_mean    = np.array(rolloff_mean)
+        bandwidth_mean  = np.array(bandwidth_mean)
+        zcr_mean        = np.array(zcr_mean)
+        rms_mean        = np.array(rms_mean)
+        rms_std         = np.array(rms_std)
+        mfcc_mean       = np.array(mfcc_mean)
+        mfcc_std        = np.array(mfcc_std)
+        chroma_mean     = np.array(chroma_mean)
+        key_indices     = np.array(key_indices)
+        key_confidences = np.array(key_confidences)
+        tonnetz         = np.array(tonnetz)
+
+        features_list = []
+        for i in range(B):
+            f: Dict[str, Any] = {
+                'filename':               file_paths[i].name,
+                'spectral_centroid_mean': float(centroid_mean[i]),
+                'spectral_centroid_std':  float(centroid_std[i]),
+                'spectral_rolloff_mean':  float(rolloff_mean[i]),
+                'spectral_bandwidth_mean': float(bandwidth_mean[i]),
+                'zero_crossing_rate_mean': float(zcr_mean[i]),
+                'rms_mean':               float(rms_mean[i]),
+                'rms_std':                float(rms_std[i]),
+                'detected_key':           _MUSICAL_KEYS[int(key_indices[i]) % 12],
+                'key_confidence':         float(key_confidences[i]),
+            }
+            for j in range(self.n_mfcc):
+                f[f'mfcc_{j+1}_mean'] = float(mfcc_mean[i, j])
+                f[f'mfcc_{j+1}_std']  = float(mfcc_std[i, j])
+            for j, key_name in enumerate(_MUSICAL_KEYS):
+                f[f'chroma_{key_name}_mean'] = float(chroma_mean[i, j])
+            for j in range(6):
+                f[f'tonnetz_{j+1}_mean'] = float(tonnetz[i, j])
+            features_list.append(f)
+
+        return features_list
