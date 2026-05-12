@@ -15,3 +15,17 @@ def test_jax_extractor_importable():
     from audio_analysis.core.jax_feature_extraction import JaxAudioFeatureExtractor
     extractor = JaxAudioFeatureExtractor(sr=22050)
     assert extractor is not None
+
+
+def test_filter_shapes():
+    """Precomputed filter matrices have correct shapes."""
+    from audio_analysis.core.jax_feature_extraction import JaxAudioFeatureExtractor
+    ex = JaxAudioFeatureExtractor(sr=22050, n_fft=2048, n_mels=128, n_mfcc=13)
+    n_freqs = 2048 // 2 + 1  # 1025
+    assert ex.dft_cos.shape == (n_freqs, 2048), f"dft_cos shape wrong: {ex.dft_cos.shape}"
+    assert ex.dft_sin.shape == (n_freqs, 2048), f"dft_sin shape wrong: {ex.dft_sin.shape}"
+    assert ex.mel_filterbank.shape == (n_freqs, 128), f"mel shape wrong: {ex.mel_filterbank.shape}"
+    assert ex.dct_matrix.shape == (128, 13), f"dct shape wrong: {ex.dct_matrix.shape}"
+    assert ex.chroma_filter.shape == (n_freqs, 12), f"chroma shape wrong: {ex.chroma_filter.shape}"
+    assert ex.tonnetz_transform.shape == (12, 6), f"tonnetz shape wrong: {ex.tonnetz_transform.shape}"
+    assert ex.freq_hz.shape == (n_freqs,), f"freq_hz shape wrong: {ex.freq_hz.shape}"
