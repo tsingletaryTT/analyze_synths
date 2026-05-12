@@ -370,35 +370,29 @@ class TenstorrentTensorProcessor(TensorProcessor):
         
         return batch
     
-    def compute_features(self, audio_tensor: np.ndarray) -> Dict[str, np.ndarray]:
-        """
-        Compute features using Tenstorrent tensor operations.
-        
-        This implementation would leverage Tenstorrent's optimized
-        tensor operations for efficient feature computation.
-        """
-        # Placeholder implementation
-        # In practice, this would use Tenstorrent's optimized tensor operations
-        logger.info(f"Computing features for tensor shape {audio_tensor.shape} on Tenstorrent")
-        
-        # For now, fallback to CPU implementation
-        cpu_processor = CPUTensorProcessor()
-        return cpu_processor.compute_features(audio_tensor)
-    
-    def cluster_features(self, features: np.ndarray, n_clusters: int) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Perform clustering using Tenstorrent-optimized operations.
-        
-        This would leverage Tenstorrent's matrix operations for
-        efficient K-means clustering.
-        """
-        # Placeholder implementation
-        # In practice, this would use Tenstorrent's optimized matrix operations
-        logger.info(f"Clustering {features.shape[0]} samples into {n_clusters} clusters on Tenstorrent")
-        
-        # For now, fallback to CPU implementation
-        cpu_processor = CPUTensorProcessor()
-        return cpu_processor.cluster_features(features, n_clusters)
+    def compute_features(
+        self,
+        audio_tensor: np.ndarray,
+        lengths: np.ndarray,
+        sample_rates: np.ndarray,
+        file_paths,
+    ):
+        """Compute features using JaxAudioFeatureExtractor on TT hardware."""
+        from .jax_feature_extraction import JaxAudioFeatureExtractor  # noqa: PLC0415
+
+        sr = int(np.bincount(sample_rates).argmax())
+        extractor = JaxAudioFeatureExtractor(sr=sr)
+        return extractor.extract_batch(audio_tensor, lengths, sr, file_paths)
+
+    def cluster_features(
+        self,
+        features: np.ndarray,
+        n_clusters: int,
+    ):
+        """Cluster features via JAX k-means on TT hardware."""
+        from .jax_feature_extraction import jax_kmeans  # noqa: PLC0415
+
+        return jax_kmeans(features, n_clusters)
 
 
 class TensorProcessorFactory:

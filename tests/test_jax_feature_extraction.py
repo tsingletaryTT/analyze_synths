@@ -185,3 +185,35 @@ def test_jax_kmeans_separates_clusters():
     assert len(set(labels[:10].tolist())) == 1, "a-cluster not uniform"
     assert len(set(labels[10:].tolist())) == 1, "b-cluster not uniform"
     assert labels[0] != labels[10], "clusters got the same label"
+
+
+def test_tenstorrent_processor_compute_features():
+    """TenstorrentTensorProcessor.compute_features returns feature dicts."""
+    from audio_analysis.core.tensor_operations import TenstorrentTensorProcessor
+
+    sr = 22050
+    audio = _make_sine_wave(440.0, 3.0, sr)
+    audio_batch = audio[np.newaxis, :].astype(np.float32)
+    lengths = np.array([len(audio)], dtype=np.int32)
+    sample_rates = np.array([sr], dtype=np.int32)
+
+    proc = TenstorrentTensorProcessor()
+    result = proc.compute_features(audio_batch, lengths, sample_rates, [Path('test.wav')])
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert 'spectral_centroid_mean' in result[0]
+
+
+def test_tenstorrent_processor_cluster_features():
+    """TenstorrentTensorProcessor.cluster_features returns labels and centers."""
+    from audio_analysis.core.tensor_operations import TenstorrentTensorProcessor
+
+    rng = np.random.default_rng(0)
+    features = rng.standard_normal((15, 8)).astype(np.float32)
+
+    proc = TenstorrentTensorProcessor()
+    labels, centers = proc.cluster_features(features, n_clusters=3)
+
+    assert labels.shape == (15,)
+    assert centers.shape == (3, 8)
