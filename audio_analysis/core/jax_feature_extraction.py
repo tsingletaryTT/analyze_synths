@@ -196,6 +196,36 @@ class JaxAudioFeatureExtractor:
             'hann_window': np.hanning(self.n_fft).astype(np.float32),
         }
 
+    def _extract_tempo_cpu(
+        self,
+        audio_batch: np.ndarray,
+        lengths: np.ndarray,
+    ) -> List[Dict[str, float]]:
+        """
+        Extract tempo and onset density on CPU via librosa.
+
+        lax.scan is not yet supported by the TT PJRT backend (stablehlo.while),
+        so this runs in the host process alongside the JAX batch dispatch.
+        """
+        import librosa  # noqa: PLC0415
+
+        results = []
+        for i in range(audio_batch.shape[0]):
+            y = audio_batch[i, :lengths[i]]
+            try:
+                tempo, beats = librosa.beat.beat_track(y=y, sr=self.sr)
+                tempo_val = float(tempo.item()) if hasattr(tempo, 'item') else float(tempo)
+                onset_density = float(len(beats) / (len(y) / self.sr)) if len(y) > 0 else 0.0
+            except Exception:
+                tempo_val = 0.0
+                onset_density = 0.0
+            results.append({
+                'tempo': tempo_val,
+                'onset_density': onset_density,
+                'beat_count': 0,  # placeholder: lax.scan DP pending TT PJRT support
+            })
+        return results
+
     def extract_batch(
         self,
         audio_batch: np.ndarray,
@@ -390,5 +420,10 @@ class JaxAudioFeatureExtractor:
             for j in range(6):
                 f[f'tonnetz_{j+1}_mean'] = float(tonnetz[i, j])
             features_list.append(f)
+
+        # Merge CPU tempo results (lax.scan not yet supported on TT PJRT)
+        tempo_results = self._extract_tempo_cpu(audio_batch, lengths)
+        for i, f in enumerate(features_list):
+            f.update(tempo_results[i])
 
         return features_list

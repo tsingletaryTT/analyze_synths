@@ -139,3 +139,22 @@ def test_extract_batch_multiple_files():
     assert features[1]['spectral_centroid_mean'] > features[0]['spectral_centroid_mean'], (
         "880 Hz sine should have higher centroid than 440 Hz"
     )
+
+
+def test_extract_batch_has_tempo_and_onset_density():
+    """extract_batch includes tempo and onset_density from CPU librosa path."""
+    from audio_analysis.core.jax_feature_extraction import JaxAudioFeatureExtractor
+
+    sr = 22050
+    audio = _make_sine_wave(440.0, 4.0, sr)
+    batch = audio[np.newaxis, :]
+    lengths = np.array([len(audio)], dtype=np.int32)
+
+    ex = JaxAudioFeatureExtractor(sr=sr)
+    features = ex.extract_batch(batch, lengths, sr, [Path('test.wav')])[0]
+
+    assert 'tempo' in features, "Missing 'tempo' key"
+    assert 'onset_density' in features, "Missing 'onset_density' key"
+    assert isinstance(features['tempo'], float)
+    assert features['tempo'] >= 0.0
+    assert features['beat_count'] == 0
