@@ -144,7 +144,8 @@ This report provides comprehensive analysis of your synthesizer music collection
         dominant_character = df['primary_character'].mode().iloc[0] if 'primary_character' in df.columns else 'Unknown'
         
         # Calculate key insights
-        unique_keys = df['detected_key'].nunique() if 'detected_key' in df.columns else 0
+        _key_col = 'key' if 'key' in df.columns else ('detected_key' if 'detected_key' in df.columns else None)
+        unique_keys = df[_key_col].nunique() if _key_col else 0
         avg_tempo = df['tempo'].mean() if 'tempo' in df.columns else 0
         
         return f"""## Executive Summary
@@ -171,7 +172,8 @@ The collection demonstrates strong compositional variety with clear structural d
         duration_stats = df['duration'].describe() if 'duration' in df.columns else None
         
         # Key distribution
-        key_distribution = df['detected_key'].value_counts().head(5) if 'detected_key' in df.columns else None
+        _key_col2 = 'key' if 'key' in df.columns else ('detected_key' if 'detected_key' in df.columns else None)
+        key_distribution = df[_key_col2].value_counts().head(5) if _key_col2 else None
         
         # Mood distribution
         mood_distribution = df['primary_mood'].value_counts().head(5) if 'primary_mood' in df.columns else None
@@ -263,7 +265,7 @@ The following sequence is optimized for musical flow, considering key relationsh
 **Technical Specifications**:
 - **Duration**: {duration_min}:{duration_sec:02d}
 - **Tempo**: {row.get('tempo', 0):.1f} BPM
-- **Key**: {row.get('detected_key', 'Unknown')}
+- **Key**: {row.get('key', row.get('detected_key', 'Unknown'))}
 - **Energy Level**: {row.get('rms_mean', 0):.3f}
 - **Spectral Brightness**: {row.get('spectral_centroid_mean', 0):.0f} Hz
 

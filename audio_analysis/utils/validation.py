@@ -229,7 +229,8 @@ def validate_sequence_data(tracks_data: List[Dict[str, Any]]) -> List[str]:
         List of validation error messages (empty if valid)
     """
     errors = []
-    required_fields = ['filename', 'duration', 'tempo', 'detected_key', 
+    # Accept both 'key' (spec-compliant) and legacy 'detected_key' field name
+    required_fields = ['filename', 'duration', 'tempo', 'key',
                       'primary_mood', 'primary_character', 'rms_mean']
     
     if not tracks_data:

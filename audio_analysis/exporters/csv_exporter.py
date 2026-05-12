@@ -227,7 +227,7 @@ class CSVExporter:
                     'duration_minutes': rec['duration'] / 60,
                     'duration_formatted': format_time_duration(rec['duration']),
                     'tempo_bpm': rec['tempo'],
-                    'detected_key': rec['key'],
+                    'key': rec['key'],
                     'primary_mood': rec['mood'],
                     'primary_character': rec['character'],
                     'energy_level': rec['energy'],

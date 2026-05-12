@@ -106,9 +106,11 @@ def calculate_collection_summary(df: pd.DataFrame, phase_data: List[Dict[str, An
     }
     
     # Musical characteristics
-    if 'detected_key' in df.columns:
-        summary['unique_keys'] = df['detected_key'].nunique()
-        summary['most_common_key'] = df['detected_key'].mode().iloc[0] if not df['detected_key'].mode().empty else 'Unknown'
+    # Support both old 'detected_key' and new spec-compliant 'key' field name
+    _key_col = 'key' if 'key' in df.columns else ('detected_key' if 'detected_key' in df.columns else None)
+    if _key_col:
+        summary['unique_keys'] = df[_key_col].nunique()
+        summary['most_common_key'] = df[_key_col].mode().iloc[0] if not df[_key_col].mode().empty else 'Unknown'
     
     if 'tempo' in df.columns:
         summary['avg_tempo'] = float(df['tempo'].mean())

@@ -59,20 +59,31 @@ def _detect_tt_device() -> str:
     """
     Probe for Tenstorrent hardware via JAX PJRT plugin.
 
-    Returns 'tenstorrent' if TT devices are found, 'cpu' otherwise.
+    Three-tier fallback chain:
+      1. TT hardware detected + PJRT plugin loads → returns 'tenstorrent'
+         logs: "Tenstorrent hardware detected: N device(s)"
+      2. JAX importable but TT devices unavailable / PJRT init fails →
+         returns 'cpu', logs warning: "TT device unavailable, using CPU JAX"
+      3. JAX not importable → returns 'cpu',
+         logs debug: "JAX not available, using librosa path"
     """
     try:
-        _activate_tt_pjrt()
         import jax  # noqa: PLC0415
+    except ImportError:
+        _logger.debug("JAX not available, using librosa path")
+        return 'cpu'
+    try:
+        _activate_tt_pjrt()
         devices = jax.devices()
-        tt_devices = [d for d in devices if d.platform == 'tt']
-        if tt_devices:
-            _logger.info("Tenstorrent hardware detected: %d device(s)", len(tt_devices))
+        if any(d.platform == 'tt' for d in devices):
+            tt_count = sum(1 for d in devices if d.platform == 'tt')
+            _logger.info("Tenstorrent hardware detected: %d device(s)", tt_count)
             return 'tenstorrent'
-        _logger.debug("JAX found no TT devices, using CPU")
+        _logger.warning("TT device unavailable, using CPU JAX")
+        return 'cpu'
     except Exception as exc:
-        _logger.debug("TT device detection failed: %s", exc)
-    return 'cpu'
+        _logger.warning("TT device unavailable, using CPU JAX: %s", exc)
+        return 'cpu'
 
 
 DEFAULT_DEVICE: str = _detect_tt_device()

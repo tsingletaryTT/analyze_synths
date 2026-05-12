@@ -192,8 +192,10 @@ class JSONExporter:
                 'std': float(df['tempo'].std())
             }
         
-        if 'detected_key' in df.columns:
-            key_counts = df['detected_key'].value_counts()
+        # Support both 'key' (spec-compliant) and legacy 'detected_key' field name
+        _key_col = 'key' if 'key' in df.columns else ('detected_key' if 'detected_key' in df.columns else None)
+        if _key_col:
+            key_counts = df[_key_col].value_counts()
             summary['key_distribution'] = {
                 'unique_keys': len(key_counts),
                 'most_common_key': key_counts.index[0],

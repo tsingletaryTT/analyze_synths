@@ -74,8 +74,9 @@ def test_extract_batch_returns_correct_keys():
         'rms_mean', 'rms_std',
         'mfcc_1_mean', 'mfcc_1_std', 'mfcc_13_mean', 'mfcc_13_std',
         'chroma_C_mean', 'chroma_B_mean',
-        'detected_key', 'key_confidence',
+        'key', 'key_confidence',
         'tonnetz_1_mean', 'tonnetz_6_mean',
+        'spectral_roughness',
     ]
     for key in required_keys:
         assert key in f, f"Missing feature key: {key}"
@@ -330,3 +331,37 @@ def test_parallel_feature_extractor_uses_tt_path():
 
     assert len(result) == 1
     assert 'spectral_centroid_mean' in result[0]
+
+
+def test_parallel_analyzer_integration():
+    """Integration test: ParallelAudioAnalyzer runs end-to-end on synthetic files."""
+    import tempfile
+    from audio_analysis import ParallelAudioAnalyzer, ProcessingConfig
+
+    tmpdir = tempfile.mkdtemp()
+    sr = 22050
+
+    # Write 3 synthetic sine-wave WAV files; try soundfile first, fall back to scipy
+    try:
+        import soundfile as sf
+        for i, freq in enumerate([440, 880, 1320]):
+            t = np.linspace(0, 3.0, int(sr * 3.0), dtype=np.float32)
+            audio = (0.3 * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+            sf.write(f'{tmpdir}/test_{i+1}.wav', audio, sr)
+    except ImportError:
+        from scipy.io import wavfile
+        for i, freq in enumerate([440, 880, 1320]):
+            t = np.linspace(0, 3.0, int(sr * 3.0), dtype=np.float32)
+            audio = (0.3 * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+            # scipy.io.wavfile requires int16 or float32; float32 is fine
+            wavfile.write(f'{tmpdir}/test_{i+1}.wav', sr, audio)
+
+    # use_multiprocessing=False avoids fork+JAX deadlock in test environments
+    config = ProcessingConfig(use_multiprocessing=False)
+    analyzer = ParallelAudioAnalyzer(tmpdir, config)
+    df = analyzer.analyze_directory()
+
+    expected_cols = ['spectral_centroid_mean', 'tempo', 'mfcc_1_mean', 'chroma_C_mean', 'key']
+    for col in expected_cols:
+        assert col in df.columns, f"Column '{col}' missing from output DataFrame"
+    assert len(df) == 3, f"Expected 3 rows, got {len(df)}"

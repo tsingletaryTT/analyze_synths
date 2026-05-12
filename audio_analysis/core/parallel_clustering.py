@@ -573,9 +573,10 @@ class ParallelKMeansClusterer:
             analysis['avg_brightness'] = float(numeric_features['spectral_centroid_mean'].mean())
             analysis['brightness_std'] = float(numeric_features['spectral_centroid_mean'].std())
         
-        # Key analysis
-        if 'detected_key' in cluster_data.columns:
-            key_counts = cluster_data['detected_key'].value_counts()
+        # Key analysis — support both 'key' (spec-compliant) and legacy 'detected_key'
+        _key_col = 'key' if 'key' in cluster_data.columns else ('detected_key' if 'detected_key' in cluster_data.columns else None)
+        if _key_col:
+            key_counts = cluster_data[_key_col].value_counts()
             analysis['common_key'] = key_counts.index[0] if not key_counts.empty else 'Unknown'
             analysis['key_diversity'] = len(key_counts)
         

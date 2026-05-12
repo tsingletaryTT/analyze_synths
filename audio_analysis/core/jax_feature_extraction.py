@@ -366,6 +366,14 @@ class JaxAudioFeatureExtractor:
             # --- Tonnetz ---
             tonnetz = jnp.dot(chroma_mean, jtonnetz)  # (6,)
 
+            # --- Spectral roughness ---
+            # Mean absolute difference between adjacent frequency bins across all
+            # valid frames — a proxy for spectral irregularity.  High values
+            # indicate rough or noisy timbres; low values indicate smooth/tonal spectra.
+            # spec shape is (n_frames, n_freqs); diff along axis=-1 gives (n_frames, n_freqs-1).
+            spec_diff = jnp.abs(jnp.diff(mag, axis=-1))           # (n_frames, n_freqs-1)
+            spectral_roughness = jnp.mean(spec_diff)               # scalar
+
             return (
                 centroid_mean, centroid_std,
                 rolloff_mean, bandwidth_mean, zcr_mean,
@@ -374,6 +382,7 @@ class JaxAudioFeatureExtractor:
                 chroma_mean,
                 key_index, key_confidence,
                 tonnetz,
+                spectral_roughness,
             )
 
         # vmap over batch dimension (audio signals and their validity masks)
@@ -387,22 +396,24 @@ class JaxAudioFeatureExtractor:
             chroma_mean,
             key_indices, key_confidences,
             tonnetz,
+            spectral_roughness,
         ) = results
 
         # Pull to numpy in one transfer
-        centroid_mean   = np.array(centroid_mean)
-        centroid_std    = np.array(centroid_std)
-        rolloff_mean    = np.array(rolloff_mean)
-        bandwidth_mean  = np.array(bandwidth_mean)
-        zcr_mean        = np.array(zcr_mean)
-        rms_mean        = np.array(rms_mean)
-        rms_std         = np.array(rms_std)
-        mfcc_mean       = np.array(mfcc_mean)
-        mfcc_std        = np.array(mfcc_std)
-        chroma_mean     = np.array(chroma_mean)
-        key_indices     = np.array(key_indices)
-        key_confidences = np.array(key_confidences)
-        tonnetz         = np.array(tonnetz)
+        centroid_mean      = np.array(centroid_mean)
+        centroid_std       = np.array(centroid_std)
+        rolloff_mean       = np.array(rolloff_mean)
+        bandwidth_mean     = np.array(bandwidth_mean)
+        zcr_mean           = np.array(zcr_mean)
+        rms_mean           = np.array(rms_mean)
+        rms_std            = np.array(rms_std)
+        mfcc_mean          = np.array(mfcc_mean)
+        mfcc_std           = np.array(mfcc_std)
+        chroma_mean        = np.array(chroma_mean)
+        key_indices        = np.array(key_indices)
+        key_confidences    = np.array(key_confidences)
+        tonnetz            = np.array(tonnetz)
+        spectral_roughness = np.array(spectral_roughness)
 
         features_list = []
         for i in range(B):
@@ -419,8 +430,12 @@ class JaxAudioFeatureExtractor:
                 'zero_crossing_rate_mean': float(zcr_mean[i]),
                 'rms_mean':               float(rms_mean[i]),
                 'rms_std':                float(rms_std[i]),
-                'detected_key':           _MUSICAL_KEYS[int(key_indices[i]) % 12],
+                # 'key' matches the field name used in feature_extraction_base.py
+                'key':                    _MUSICAL_KEYS[int(key_indices[i]) % 12],
                 'key_confidence':         float(key_confidences[i]),
+                # spectral_roughness: mean absolute adjacent-bin difference across
+                # valid frames — proxy for timbral roughness / spectral irregularity.
+                'spectral_roughness':     float(spectral_roughness[i]),
             }
             for j in range(self.n_mfcc):
                 f[f'mfcc_{j+1}_mean'] = float(mfcc_mean[i, j])

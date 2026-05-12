@@ -78,7 +78,7 @@ class AudioClusterer:
             DataFrame with cleaned numeric features suitable for clustering
         """
         # Select only numeric columns for clustering
-        # This excludes string features like filename and detected_key
+        # This excludes string features like filename and key
         numeric_columns = df.select_dtypes(include=[np.number]).columns
         clustering_features = df[numeric_columns].copy()
         
@@ -306,14 +306,16 @@ class AudioClusterer:
             brightness_std = float(cluster_data['spectral_centroid_mean'].std())
             
             # Key analysis - important for harmonic compatibility
-            if 'detected_key' in cluster_data.columns:
-                key_counts = cluster_data['detected_key'].value_counts()
+            # Support both 'key' (spec-compliant) and legacy 'detected_key' field name
+            _key_col = 'key' if 'key' in cluster_data.columns else ('detected_key' if 'detected_key' in cluster_data.columns else None)
+            if _key_col:
+                key_counts = cluster_data[_key_col].value_counts()
                 common_key = key_counts.index[0] if not key_counts.empty else 'Unknown'
                 key_diversity = len(key_counts)
             else:
                 common_key = 'Unknown'
                 key_diversity = 0
-            
+
             # Structural analysis - if phase information is available
             if 'num_phases' in cluster_data.columns:
                 avg_phases = float(cluster_data['num_phases'].mean())
@@ -444,8 +446,10 @@ class AudioClusterer:
             max_score += 2
         
         # Key coherence - check if keys are compatible
-        if 'detected_key' in cluster_data.columns:
-            unique_keys = cluster_data['detected_key'].nunique()
+        # Support both 'key' (spec-compliant) and legacy 'detected_key' field name
+        _key_col_coh = 'key' if 'key' in cluster_data.columns else ('detected_key' if 'detected_key' in cluster_data.columns else None)
+        if _key_col_coh:
+            unique_keys = cluster_data[_key_col_coh].nunique()
             if unique_keys <= 2:  # At most 2 different keys
                 coherence_score += 2
             elif unique_keys <= 3:  # At most 3 different keys

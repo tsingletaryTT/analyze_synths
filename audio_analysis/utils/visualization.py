@@ -394,17 +394,19 @@ class Visualizer:
             df: DataFrame with features
             cluster_labels: Cluster assignments
         """
-        if 'detected_key' not in df.columns:
+        # Support both 'key' (spec-compliant) and legacy 'detected_key' field name
+        _key_col = 'key' if 'key' in df.columns else ('detected_key' if 'detected_key' in df.columns else None)
+        if _key_col is None:
             ax.text(0.5, 0.5, 'Key information not available',
                    ha='center', va='center', transform=ax.transAxes)
             return
-        
+
         # Create DataFrame for plotting
         df_plot = df.copy()
         df_plot['cluster'] = cluster_labels
-        
+
         # Create crosstab
-        key_cluster_counts = pd.crosstab(df_plot['detected_key'], df_plot['cluster'])
+        key_cluster_counts = pd.crosstab(df_plot[_key_col], df_plot['cluster'])
         
         # Create stacked bar plot
         key_cluster_counts.plot(kind='bar', stacked=True, ax=ax, colormap='viridis')

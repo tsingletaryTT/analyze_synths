@@ -211,7 +211,7 @@ if MCP_AVAILABLE:
                         "duration_seconds": float(row.get('duration', 0)),
                         "duration_minutes": float(row.get('duration', 0)) / 60,
                         "tempo_bpm": float(row.get('tempo', 0)),
-                        "detected_key": str(row.get('detected_key', 'unknown')),
+                        "detected_key": str(row.get('key', row.get('detected_key', 'unknown'))),
                         "energy_level": float(row.get('rms_mean', 0)),
                         "spectral_brightness_hz": float(row.get('spectral_centroid_mean', 0))
                     }
@@ -611,7 +611,7 @@ if MCP_AVAILABLE:
                 "collection_summary": {
                     "total_tracks": len(df),
                     "total_duration_minutes": float(df['duration'].sum()) / 60,
-                    "unique_keys": df['detected_key'].nunique() if 'detected_key' in df.columns else 0,
+                    "unique_keys": df['key'].nunique() if 'key' in df.columns else (df['detected_key'].nunique() if 'detected_key' in df.columns else 0),
                     "avg_tempo_bpm": float(df['tempo'].mean()) if 'tempo' in df.columns else 0,
                     "dominant_mood": df['primary_mood'].mode().iloc[0] if 'primary_mood' in df.columns else 'Unknown',
                     "num_clusters": n_clusters,

@@ -209,7 +209,7 @@ class SequenceRecommender:
                 filename=str(row.get('filename', 'unknown')),
                 duration=float(row.get('duration', 0)),
                 tempo=float(row.get('tempo', 120)),
-                key=str(row.get('detected_key', 'C')),
+                key=str(row.get('key', row.get('detected_key', 'C'))),
                 mood=str(row.get('primary_mood', 'neutral')),
                 character=str(row.get('primary_character', 'unknown')),
                 energy=float(row.get('rms_mean', 0)),

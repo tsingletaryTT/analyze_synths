@@ -194,10 +194,12 @@ class FeatureExtractionCore:
         key_index = np.argmax(chroma_mean)
         detected_key = self.musical_keys[key_index]
         key_confidence = float(np.max(chroma_mean))
-        
+
         # Compile harmonic features
+        # Field name is 'key' (spec-compliant); 'detected_key' is an old alias
+        # preserved for backward compatibility via the reference update below.
         features = {
-            'detected_key': detected_key,
+            'key': detected_key,
             'key_confidence': key_confidence,
         }
         
@@ -297,7 +299,7 @@ class FeatureExtractionCore:
         
         for key, value in features.items():
             # Skip non-numeric features
-            if key in ['filename', 'detected_key']:
+            if key in ['filename', 'key']:
                 continue
                 
             # Include numeric values
@@ -319,7 +321,7 @@ class FeatureExtractionCore:
         # Check for required features
         required_features = [
             'spectral_centroid_mean', 'spectral_rolloff_mean', 'spectral_bandwidth_mean',
-            'zero_crossing_rate_mean', 'rms_mean', 'tempo', 'detected_key'
+            'zero_crossing_rate_mean', 'rms_mean', 'tempo', 'key'
         ]
         
         for feature in required_features:
@@ -358,7 +360,7 @@ class FeatureExtractionCore:
             'onset_density': 'Rhythmic activity density',
             
             # Harmonic features
-            'detected_key': 'Predominant musical key',
+            'key': 'Predominant musical key',
             'key_confidence': 'Confidence in key detection',
             
             # MFCC features (timbre)
