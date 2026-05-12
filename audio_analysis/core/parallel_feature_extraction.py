@@ -213,10 +213,16 @@ class ParallelFeatureExtractor:
             batch_paths = file_paths[i:i + self.config.batch_size]
             batches.append(batch_paths)
         
-        # Load each batch in parallel
+        # Load each batch in parallel.
+        # IMPORTANT: Use 'spawn' start method, not the default 'fork'.  JAX is
+        # multithreaded so os.fork() after JAX initialisation causes a deadlock.
+        # spawn creates a clean child process that imports libraries fresh.
         audio_batches = []
         if self.config.use_multiprocessing:
-            with ProcessPoolExecutor(max_workers=self.config.max_workers) as executor:
+            with ProcessPoolExecutor(
+                max_workers=self.config.max_workers,
+                mp_context=mp.get_context('spawn'),
+            ) as executor:
                 future_to_batch = {
                     executor.submit(self._load_audio_batch, batch_paths): batch_paths
                     for batch_paths in batches
@@ -290,7 +296,11 @@ class ParallelFeatureExtractor:
         batch_results = []
         
         if self.config.use_multiprocessing:
-            with ProcessPoolExecutor(max_workers=self.config.max_workers) as executor:
+            # Use 'spawn' to avoid JAX fork-deadlock (see _load_audio_files_parallel).
+            with ProcessPoolExecutor(
+                max_workers=self.config.max_workers,
+                mp_context=mp.get_context('spawn'),
+            ) as executor:
                 future_to_batch = {
                     executor.submit(self._extract_batch_features, batch): batch
                     for batch in audio_batches

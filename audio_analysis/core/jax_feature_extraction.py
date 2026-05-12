@@ -5,10 +5,16 @@ Runs the full feature extraction pipeline on Tenstorrent Blackhole hardware
 via the JAX PJRT plugin. Uses DFT-via-matmul instead of jnp.fft.rfft because
 complex tensor materialization is not yet supported by the TT PJRT backend.
 
-Hardware constraints confirmed on P150X4 (JAX 0.6.0, 2026-05-12):
-  - jnp.dot / einsum / vmap / jit / cumsum / argmax: supported
-  - jnp.fft.rfft: NOT supported (complex materialization failure)
+Hardware constraints confirmed on P300C x4 Blackhole (JAX 0.7.1, 2026-05-12):
+  - jnp.dot / einsum / vmap / jit / cumsum: supported
+  - jnp.argmax(x, axis=-1): supported ONLY on the LAST axis
+  - jnp.argmin(x, axis=n): NOT supported (stablehlo.reduce failure)
+    Workaround: use jnp.argmax(-x.T, axis=-1) for argmin over axis=0
+  - jnp.fft.rfft: NOT supported (complex tensor materialization failure)
   - lax.scan / lax.while_loop / lax.fori_loop: NOT supported (stablehlo.while)
+  - Float32 DFT: 2048-wide matmul accumulates ~10x more off-peak energy
+    than CPU float64 reference; spectral centroid biased ~8-10%, peak bin
+    location is correct
 """
 
 import logging
@@ -402,6 +408,10 @@ class JaxAudioFeatureExtractor:
         for i in range(B):
             f: Dict[str, Any] = {
                 'filename':               file_paths[i].name,
+                # Duration in seconds: actual sample count divided by sample rate.
+                # This matches the 'duration' field produced by feature_extraction_base.py
+                # and is required by the parallel_analyzer creative-analysis pipeline.
+                'duration':               float(lengths[i]) / float(sr),
                 'spectral_centroid_mean': float(centroid_mean[i]),
                 'spectral_centroid_std':  float(centroid_std[i]),
                 'spectral_rolloff_mean':  float(rolloff_mean[i]),
@@ -479,7 +489,10 @@ def jax_kmeans(
         # (k, n, d) distances
         diffs    = jfeatures[None, :, :] - centers[:, None, :]
         sq_dists = jnp.sum(diffs ** 2, axis=-1)            # (k, n)
-        labels_j = jnp.argmin(sq_dists, axis=0)            # (n,)
+        # TT PJRT constraint: argmin/argmax only supported on the last axis.
+        # Workaround: transpose (k,n) -> (n,k), negate, argmax over last dim.
+        # Mathematically equivalent to argmin(sq_dists, axis=0).
+        labels_j = jnp.argmax(-sq_dists.T, axis=-1)        # (n,)
 
         # Update centroids via one-hot aggregation
         one_hot = (labels_j[None, :] == jnp.arange(n_clusters)[:, None]).astype(jnp.float32)
