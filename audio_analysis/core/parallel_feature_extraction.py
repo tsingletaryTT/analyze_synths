@@ -85,6 +85,15 @@ class AudioBatch:
         }
 
 
+def _get_default_device() -> str:
+    """Lazy import avoids circular imports at module load time."""
+    try:
+        from audio_analysis import DEFAULT_DEVICE  # noqa: PLC0415
+        return DEFAULT_DEVICE
+    except Exception:
+        return 'cpu'
+
+
 @dataclass
 class ProcessingConfig:
     """Configuration for parallel processing parameters."""
@@ -95,8 +104,12 @@ class ProcessingConfig:
     memory_limit_mb: int = 2048
     chunk_size_seconds: float = 30.0
     sample_rate: Optional[int] = None
-    
+    device: str = field(default_factory=_get_default_device)
+
     def __post_init__(self):
+        # Enforce 22050 Hz when targeting TT so filter matrices stay consistent.
+        if self.device == 'tenstorrent' and self.sample_rate is None:
+            self.sample_rate = 22050
         # Adjust batch size based on available memory
         if self.memory_limit_mb < 1024:
             self.batch_size = min(self.batch_size, 4)

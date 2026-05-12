@@ -32,6 +32,9 @@ Usage:
     analyzer.export_comprehensive_analysis(export_format="markdown", base_name="my_analysis")
 """
 
+import logging as _logging
+import os as _os
+
 from .api.analyzer import AudioAnalyzer
 from .api.parallel_analyzer import ParallelAudioAnalyzer
 from .api.mcp_server import MCPAudioAnalyzer
@@ -42,6 +45,38 @@ from .core.parallel_feature_extraction import ParallelFeatureExtractor, Processi
 from .core.parallel_clustering import ParallelKMeansClusterer, ClusteringConfig
 from .core.tensor_operations import TensorFeatureExtractor, TensorBatch
 
+_logger = _logging.getLogger(__name__)
+
+
+def _activate_tt_pjrt() -> None:
+    """Set PJRT plugin env var if not already set by the caller's environment."""
+    plugin_path = _os.path.expanduser('~/tt-xla/build/lib/libpjrt_tt.so')
+    if not _os.environ.get('PJRT_PLUGIN_LIBRARY_PATH') and _os.path.exists(plugin_path):
+        _os.environ['PJRT_PLUGIN_LIBRARY_PATH'] = plugin_path
+
+
+def _detect_tt_device() -> str:
+    """
+    Probe for Tenstorrent hardware via JAX PJRT plugin.
+
+    Returns 'tenstorrent' if TT devices are found, 'cpu' otherwise.
+    """
+    try:
+        _activate_tt_pjrt()
+        import jax  # noqa: PLC0415
+        devices = jax.devices()
+        tt_devices = [d for d in devices if d.platform == 'tt']
+        if tt_devices:
+            _logger.info("Tenstorrent hardware detected: %d device(s)", len(tt_devices))
+            return 'tenstorrent'
+        _logger.debug("JAX found no TT devices, using CPU")
+    except Exception as exc:
+        _logger.debug("TT device detection failed: %s", exc)
+    return 'cpu'
+
+
+DEFAULT_DEVICE: str = _detect_tt_device()
+
 __version__ = "2.0.0"
 __author__ = "Audio Analysis Toolkit Team"
 __email__ = "support@audioanalysis.com"
@@ -49,7 +84,7 @@ __email__ = "support@audioanalysis.com"
 __all__ = [
     'AudioAnalyzer',
     'ParallelAudioAnalyzer',
-    'MCPAudioAnalyzer', 
+    'MCPAudioAnalyzer',
     'MoodDescriptors',
     'CharacterTags',
     'ParallelFeatureExtractor',
@@ -57,5 +92,7 @@ __all__ = [
     'ParallelKMeansClusterer',
     'ClusteringConfig',
     'TensorFeatureExtractor',
-    'TensorBatch'
+    'TensorBatch',
+    'DEFAULT_DEVICE',
+    '_detect_tt_device',
 ]

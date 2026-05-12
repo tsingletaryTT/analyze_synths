@@ -29,3 +29,25 @@ def test_filter_shapes():
     assert ex.chroma_filter.shape == (n_freqs, 12), f"chroma shape wrong: {ex.chroma_filter.shape}"
     assert ex.tonnetz_transform.shape == (12, 6), f"tonnetz shape wrong: {ex.tonnetz_transform.shape}"
     assert ex.freq_hz.shape == (n_freqs,), f"freq_hz shape wrong: {ex.freq_hz.shape}"
+
+
+def test_device_detection_returns_string():
+    """_detect_tt_device returns 'tenstorrent' or 'cpu'."""
+    from audio_analysis import _detect_tt_device
+    result = _detect_tt_device()
+    assert result in ('tenstorrent', 'cpu'), f"Unexpected device: {result}"
+
+
+def test_processing_config_has_device():
+    """ProcessingConfig exposes a device field."""
+    from audio_analysis.core.parallel_feature_extraction import ProcessingConfig
+    config = ProcessingConfig()
+    assert hasattr(config, 'device')
+    assert config.device in ('tenstorrent', 'cpu')
+
+
+def test_processing_config_tt_forces_sample_rate():
+    """When device='tenstorrent', sample_rate is set to 22050."""
+    from audio_analysis.core.parallel_feature_extraction import ProcessingConfig
+    config = ProcessingConfig(device='tenstorrent')
+    assert config.sample_rate == 22050
