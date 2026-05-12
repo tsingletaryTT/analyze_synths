@@ -158,3 +158,30 @@ def test_extract_batch_has_tempo_and_onset_density():
     assert isinstance(features['tempo'], float)
     assert features['tempo'] >= 0.0
     assert features['beat_count'] == 0
+
+
+def test_jax_kmeans_output_shapes():
+    """jax_kmeans returns labels (n,) and centers (k, d)."""
+    from audio_analysis.core.jax_feature_extraction import jax_kmeans
+
+    rng = np.random.default_rng(42)
+    features = rng.standard_normal((20, 10)).astype(np.float32)
+    labels, centers = jax_kmeans(features, n_clusters=3)
+
+    assert labels.shape == (20,), f"labels shape wrong: {labels.shape}"
+    assert centers.shape == (3, 10), f"centers shape wrong: {centers.shape}"
+    assert set(labels.tolist()).issubset({0, 1, 2}), f"unexpected label values: {set(labels.tolist())}"
+
+
+def test_jax_kmeans_separates_clusters():
+    """jax_kmeans correctly separates clearly distinct clusters."""
+    from audio_analysis.core.jax_feature_extraction import jax_kmeans
+
+    a = np.zeros((10, 2), dtype=np.float32)
+    b = np.ones((10, 2), dtype=np.float32) * 10.0
+    features = np.vstack([a, b])
+    labels, centers = jax_kmeans(features, n_clusters=2)
+
+    assert len(set(labels[:10].tolist())) == 1, "a-cluster not uniform"
+    assert len(set(labels[10:].tolist())) == 1, "b-cluster not uniform"
+    assert labels[0] != labels[10], "clusters got the same label"

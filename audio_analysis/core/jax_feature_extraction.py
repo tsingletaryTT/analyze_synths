@@ -427,3 +427,63 @@ class JaxAudioFeatureExtractor:
             f.update(tempo_results[i])
 
         return features_list
+
+
+def jax_kmeans(
+    features: np.ndarray,
+    n_clusters: int,
+    n_iter: int = 50,
+    seed: int = 42,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    K-means clustering via JAX vmap distance steps, fixed n_iter iterations.
+
+    Uses a Python for-loop (JAX traces/unrolls it) instead of lax.while_loop
+    because stablehlo.while is not yet supported by the TT PJRT backend.
+
+    Args:
+        features: (n_samples, n_features) float32
+        n_clusters: number of clusters
+        n_iter: fixed Lloyd's iterations (default 50)
+        seed: random seed for k-means++ initialisation (runs on CPU)
+
+    Returns:
+        labels: (n_samples,) int32
+        centers: (n_clusters, n_features) float32
+    """
+    if not _JAX_AVAILABLE:
+        raise RuntimeError("JAX is not available")
+
+    n_samples, n_feats = features.shape
+
+    # k-means++ initialisation on CPU (fast, one-time)
+    rng = np.random.default_rng(seed)
+    center_indices = [int(rng.integers(n_samples))]
+    for _ in range(1, n_clusters):
+        dists = np.min(
+            np.sum(
+                (features[:, None, :] - features[center_indices][None, :, :]) ** 2,
+                axis=-1,
+            ),
+            axis=1,
+        )
+        probs = dists / (dists.sum() + 1e-8)
+        center_indices.append(int(rng.choice(n_samples, p=probs)))
+    init_centers = features[center_indices]
+
+    jfeatures = jnp.array(features)
+    centers   = jnp.array(init_centers)
+
+    # Fixed-iteration Lloyd's — Python loop, JAX traces and unrolls the graph
+    for _ in range(n_iter):
+        # (k, n, d) distances
+        diffs    = jfeatures[None, :, :] - centers[:, None, :]
+        sq_dists = jnp.sum(diffs ** 2, axis=-1)            # (k, n)
+        labels_j = jnp.argmin(sq_dists, axis=0)            # (n,)
+
+        # Update centroids via one-hot aggregation
+        one_hot = (labels_j[None, :] == jnp.arange(n_clusters)[:, None]).astype(jnp.float32)
+        counts  = jnp.sum(one_hot, axis=1, keepdims=True) + 1e-8
+        centers = jnp.dot(one_hot, jfeatures) / counts     # (k, d)
+
+    return np.array(labels_j).astype(np.int32), np.array(centers).astype(np.float32)
