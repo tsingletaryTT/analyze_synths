@@ -205,6 +205,84 @@ def test_tenstorrent_processor_compute_features():
     assert 'spectral_centroid_mean' in result[0]
 
 
+def test_parity_with_librosa_baseline():
+    """
+    JAX pipeline spectral values agree with feature_extraction_base within 25%
+    relative tolerance.
+
+    Keys compared: spectral centroid/std/rolloff/bandwidth and ZCR — these use
+    the same algorithm in both paths (magnitude spectrum → weighted statistics),
+    so agreement is expected to be very tight (<1% on real signals).
+
+    Keys excluded (different algorithms/normalisations):
+    - tempo, onset_density, beat_count  — different rhythm-tracking algorithms
+    - detected_key                      — string label
+    - filename, duration                — metadata, not computed by JAX path
+    - mfcc_*                            — JAX uses plain DCT-II; librosa applies
+                                          HTK mel scaling + liftering, giving
+                                          different dynamic ranges
+    - chroma_*, key_confidence          — JAX uses raw magnitude chroma; librosa
+                                          normalises each chroma frame to unit norm
+    - tonnetz_*                         — tonnetz is derived from chroma, so the
+                                          same normalisation difference propagates
+    - rms_*                             — librosa computes RMS per frame; JAX
+                                          computes global RMS over the padded batch
+                                          array, giving ~35% difference on short clips
+    """
+    from audio_analysis.core.jax_feature_extraction import JaxAudioFeatureExtractor
+    from audio_analysis.core.feature_extraction_base import FeatureExtractionCore
+
+    sr = 22050
+    rng = np.random.default_rng(0)
+    # White noise exercises all frequency bins equally
+    audio = (rng.standard_normal(sr * 4) * 0.1).astype(np.float32)
+
+    # JAX path
+    ex = JaxAudioFeatureExtractor(sr=sr)
+    batch = audio[np.newaxis, :]
+    lengths = np.array([len(audio)], dtype=np.int32)
+    jax_features = ex.extract_batch(batch, lengths, sr, [Path('test.wav')])[0]
+
+    # librosa baseline
+    core = FeatureExtractionCore(sample_rate=sr)
+    lib_features = core.extract_comprehensive_features(audio, sr, Path('test.wav'), 4.0)
+
+    # Keys that use equivalent algorithms in both paths and should agree closely.
+    # MFCC, chroma, tonnetz, and rms are excluded because of known normalisation
+    # differences between the JAX custom pipeline and librosa (see docstring).
+    comparable_keys = {
+        'spectral_centroid_mean',
+        'spectral_centroid_std',
+        'spectral_rolloff_mean',
+        'spectral_bandwidth_mean',
+        'zero_crossing_rate_mean',
+    }
+
+    # Verify all comparable keys are present in both outputs
+    for key in comparable_keys:
+        assert key in jax_features, f"JAX output missing key: {key}"
+        assert key in lib_features, f"librosa output missing key: {key}"
+
+    assert len(comparable_keys) >= 5, "Sanity check: at least 5 comparable keys required"
+
+    failures = []
+    for key in sorted(comparable_keys):
+        jv = float(jax_features[key])
+        lv = float(lib_features[key])
+        if abs(lv) < 1e-6:
+            continue  # skip near-zero baseline values
+        rel_err = abs(jv - lv) / (abs(lv) + 1e-8)
+        if rel_err > 0.25:
+            failures.append(
+                f"  {key}: jax={jv:.4f} librosa={lv:.4f} rel_err={rel_err:.1%}"
+            )
+
+    assert not failures, (
+        "Parity failures (>25% relative error) on spectral features "
+        "that should use equivalent algorithms:\n" + "\n".join(failures)
+    )
+
+
 def test_tenstorrent_processor_cluster_features():
     """TenstorrentTensorProcessor.cluster_features returns labels and centers."""
     from audio_analysis.core.tensor_operations import TenstorrentTensorProcessor
