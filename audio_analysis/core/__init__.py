@@ -16,10 +16,13 @@ from .feature_extraction import FeatureExtractor
 from .phase_detection import PhaseDetector
 from .clustering import AudioClusterer
 from .sequencing import SequenceRecommender
+from .tt_stft_kernel import SpectrogramChunk, TTStftKernel
 
 __all__ = [
     'FeatureExtractor',
-    'PhaseDetector', 
+    'PhaseDetector',
     'AudioClusterer',
-    'SequenceRecommender'
+    'SequenceRecommender',
+    'SpectrogramChunk',
+    'TTStftKernel',
 ]
