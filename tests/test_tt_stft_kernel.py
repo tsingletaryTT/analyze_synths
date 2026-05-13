@@ -75,6 +75,22 @@ def test_process_chunk_parity_with_librosa():
     )
 
 
+def test_filter_shapes():
+    """Precomputed DFT matrices must have correct shapes for matmul."""
+    kernel = TTStftKernel(sr=22050, n_fft=2048, hop_length=512, n_mels=128)
+    # cos/sin: (n_fft, n_freqs) for frames @ cos_basis
+    assert kernel._cos_basis.shape == (2048, 1025), f"_cos_basis shape: {kernel._cos_basis.shape}"
+    assert kernel._sin_basis.shape == (2048, 1025), f"_sin_basis shape: {kernel._sin_basis.shape}"
+    # mel_filter: (n_freqs, n_mels) for mag @ mel_filter
+    assert kernel._mel_filter.shape == (1025, 128), f"_mel_filter shape: {kernel._mel_filter.shape}"
+    assert kernel._hann.shape == (2048,), f"_hann shape: {kernel._hann.shape}"
+    # All float32
+    assert kernel._cos_basis.dtype == np.float32
+    assert kernel._sin_basis.dtype == np.float32
+    assert kernel._mel_filter.dtype == np.float32
+    assert kernel._hann.dtype == np.float32
+
+
 def test_timestamps_are_correct():
     """Frame timestamps must reflect chunk_start_time offset."""
     sr = 22050

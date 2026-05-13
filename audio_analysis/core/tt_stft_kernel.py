@@ -18,6 +18,13 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
+TILE = 32  # TT-Lang Tensix tile size — all dimensions must be multiples of this
+
+
+def _pad_to_tile(n: int) -> int:
+    """Round `n` up to the nearest multiple of TILE (32)."""
+    return ((n + TILE - 1) // TILE) * TILE
+
 
 @dataclass
 class SpectrogramChunk:
@@ -161,7 +168,7 @@ class TTStftKernel:
         # frames @ cos_basis: (n_frames, n_fft) × (n_fft, n_freqs) → (n_frames, n_freqs)
         cos_proj = frames @ self._cos_basis   # (n_frames, n_freqs)
         sin_proj = frames @ self._sin_basis   # (n_frames, n_freqs)
-        mag = np.sqrt(cos_proj ** 2 + sin_proj ** 2).astype(np.float32)
+        mag = np.sqrt(cos_proj ** 2 + sin_proj ** 2 + 1e-8).astype(np.float32)
 
         # ------ Mel filterbank ------
         # mag @ mel_filter: (n_frames, n_freqs) × (n_freqs, n_mels) → (n_frames, n_mels)
