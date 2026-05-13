@@ -67,6 +67,113 @@ class TTStftKernel:
         self.chunk_samples   = int(chunk_seconds  * sr)
         self.overlap_samples = int(overlap_seconds * sr)
 
+        # Precompute static matrices (same as in jax_feature_extraction.py)
+        self._cos_basis, self._sin_basis, self._mel_filter, self._hann = \
+            self._build_stft_constants(sr, n_fft, n_mels)
+
+    @staticmethod
+    def _build_stft_constants(sr: int, n_fft: int, n_mels: int):
+        """
+        Precompute static STFT matrices (computed once at init, reused per chunk).
+
+        All four matrices are float32 to match the Tensix tile dtype and to keep
+        memory bandwidth low.  The mel_filter is transposed from librosa's default
+        (n_mels, n_freqs) to (n_freqs, n_mels) so that `mag @ mel_filter` works
+        without an extra transpose on the hot path.
+
+        Returns
+        -------
+        cos_basis  : (n_fft, n_freqs) float32 — cosine DFT basis
+        sin_basis  : (n_fft, n_freqs) float32 — sine DFT basis
+        mel_filter : (n_freqs, n_mels) float32 — mel filterbank (transposed)
+        hann       : (n_fft,) float32 — Hann window
+        """
+        import librosa
+
+        n_freqs = n_fft // 2 + 1
+        # DFT basis: cos_basis[t, k] = cos(2π * t * k / n_fft)
+        # Using float64 for the phase computation to avoid accumulation error,
+        # then cast to float32 once the trig is done.
+        freqs = np.arange(n_freqs, dtype=np.float64)
+        t_idx = np.arange(n_fft, dtype=np.float64)
+        phase = 2.0 * np.pi * np.outer(t_idx, freqs) / n_fft
+        cos_basis = np.cos(phase).astype(np.float32)   # (n_fft, n_freqs)
+        sin_basis = np.sin(phase).astype(np.float32)   # (n_fft, n_freqs)
+
+        # Mel filterbank: librosa returns (n_mels, n_freqs); transpose to (n_freqs, n_mels)
+        mel_filter = librosa.filters.mel(
+            sr=sr, n_fft=n_fft, n_mels=n_mels
+        ).T.astype(np.float32)   # (n_freqs, n_mels)
+
+        hann = np.hanning(n_fft).astype(np.float32)    # (n_fft,)
+        return cos_basis, sin_basis, mel_filter, hann
+
+    def _process_chunk_numpy(
+        self,
+        audio_chunk: np.ndarray,
+        chunk_start_time: float = 0.0,
+    ) -> SpectrogramChunk:
+        """
+        NumPy fallback: framing → Hann window → DFT matmul → magnitude → mel.
+
+        This is the reference implementation; TT-Lang runs the same math on Tensix.
+
+        The DFT is expressed as two matmuls (cosine and sine projections) rather
+        than np.fft.rfft so that the identical operation can be lowered to a pair
+        of Tensix matmul tiles, keeping TT-Lang parity exact.
+
+        Parameters
+        ----------
+        audio_chunk      : (n_samples,) — raw audio (cast to float32 internally)
+        chunk_start_time : time in seconds of the first sample in this chunk
+
+        Returns
+        -------
+        SpectrogramChunk with mag, mel, and timestamps arrays all float32
+        """
+        n_fft = self.n_fft
+        hop   = self.hop_length
+        audio = audio_chunk.astype(np.float32)
+
+        # ------ Frame the audio ------
+        n_samples = len(audio)
+        # Number of complete frames that fit without zero-padding
+        n_frames = max(0, (n_samples - n_fft) // hop + 1)
+        if n_frames == 0:
+            return SpectrogramChunk(
+                mag=np.zeros((0, self.n_freqs), dtype=np.float32),
+                mel=np.zeros((0, self.n_mels), dtype=np.float32),
+                timestamps=np.zeros(0, dtype=np.float32),
+            )
+
+        # Build frame matrix (n_frames, n_fft) using stride tricks to avoid copy.
+        # We copy afterwards so that the in-place Hann multiply is safe.
+        frames = np.lib.stride_tricks.as_strided(
+            audio,
+            shape=(n_frames, n_fft),
+            strides=(audio.strides[0] * hop, audio.strides[0]),
+        ).copy()   # copy so we can modify in-place
+
+        # ------ Apply Hann window ------
+        frames *= self._hann  # broadcast (n_frames, n_fft) * (n_fft,)
+
+        # ------ DFT via matmul ------
+        # frames @ cos_basis: (n_frames, n_fft) × (n_fft, n_freqs) → (n_frames, n_freqs)
+        cos_proj = frames @ self._cos_basis   # (n_frames, n_freqs)
+        sin_proj = frames @ self._sin_basis   # (n_frames, n_freqs)
+        mag = np.sqrt(cos_proj ** 2 + sin_proj ** 2).astype(np.float32)
+
+        # ------ Mel filterbank ------
+        # mag @ mel_filter: (n_frames, n_freqs) × (n_freqs, n_mels) → (n_frames, n_mels)
+        mel = (mag @ self._mel_filter).astype(np.float32)  # (n_frames, n_mels)
+
+        # ------ Timestamps: center of each frame ------
+        # Frame i starts at sample i*hop; center is at sample i*hop + n_fft//2
+        frame_centers = (np.arange(n_frames) * hop + n_fft // 2) / self.sr
+        timestamps = (frame_centers + chunk_start_time).astype(np.float32)
+
+        return SpectrogramChunk(mag=mag, mel=mel, timestamps=timestamps)
+
     def process_chunk(
         self,
         audio_chunk: np.ndarray,
@@ -84,7 +191,8 @@ class TTStftKernel:
         -------
         SpectrogramChunk
         """
-        raise NotImplementedError("process_chunk implemented in Task 2")
+        # TT-Lang dispatch wired in Task 5; for now, NumPy path only
+        return self._process_chunk_numpy(audio_chunk, chunk_start_time)
 
     def process_file(
         self,
