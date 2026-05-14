@@ -336,6 +336,35 @@ def test_parallel_feature_extractor_uses_tt_path():
     assert 'spectral_centroid_mean' in result[0]
 
 
+def test_kernel_backed_extractor_returns_correct_keys():
+    """After TTStftKernel integration, extract_batch still produces all required keys."""
+    from audio_analysis.core.jax_feature_extraction import JaxAudioFeatureExtractor
+
+    sr = 22050
+    t = np.linspace(0, 3.0, int(sr * 3.0), endpoint=False)
+    audio = (0.3 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+    batch = audio[np.newaxis, :]
+    lengths = np.array([len(audio)], dtype=np.int32)
+
+    ex = JaxAudioFeatureExtractor(sr=sr)
+    features = ex.extract_batch(batch, lengths, sr, [Path('test.wav')])
+
+    assert len(features) == 1
+    f = features[0]
+    required = [
+        'filename', 'spectral_centroid_mean', 'spectral_centroid_std',
+        'spectral_rolloff_mean', 'spectral_bandwidth_mean', 'zero_crossing_rate_mean',
+        'rms_mean', 'rms_std',
+        'mfcc_1_mean', 'mfcc_13_mean',
+        'chroma_C_mean', 'key', 'key_confidence',
+        'tonnetz_1_mean', 'spectral_roughness',
+    ]
+    for k in required:
+        assert k in f, f"Missing key: {k}"
+    assert 300 < f['spectral_centroid_mean'] < 800, \
+        f"centroid {f['spectral_centroid_mean']:.1f} not plausible for 440 Hz"
+
+
 def test_parallel_analyzer_integration():
     """Integration test: ParallelAudioAnalyzer runs end-to-end on synthetic files."""
     import tempfile
