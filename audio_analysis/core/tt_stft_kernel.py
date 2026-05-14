@@ -78,6 +78,14 @@ class TTStftKernel:
         self._cos_basis, self._sin_basis, self._mel_filter, self._hann = \
             self._build_stft_constants(sr, n_fft, n_mels)
 
+        # Detect TT-Lang simulator availability once at init.
+        # Cached as a boolean so the import probe is not repeated per chunk.
+        self._try_ttl = self._detect_ttl()
+        if self._try_ttl:
+            log.info("TT-Lang simulator available — using fused STFT kernel")
+        else:
+            log.info("TT-Lang unavailable — using NumPy STFT fallback")
+
     @staticmethod
     def _build_stft_constants(sr: int, n_fft: int, n_mels: int):
         """
@@ -114,6 +122,21 @@ class TTStftKernel:
 
         hann = np.hanning(n_fft).astype(np.float32)    # (n_fft,)
         return cos_basis, sin_basis, mel_filter, hann
+
+    @staticmethod
+    def _detect_ttl() -> bool:
+        """
+        Return True if the TT-Lang simulator is importable.
+
+        Called once at init; result is cached in ``self._try_ttl``.  Importing
+        ``tt_stft_sim`` also triggers the TT-Lang ``sys.path`` injection, so
+        the cost is a single import probe rather than repeated path manipulation.
+        """
+        try:
+            from audio_analysis.core import tt_stft_sim  # noqa: F401
+            return True
+        except ImportError:
+            return False
 
     def _process_chunk_numpy(
         self,
@@ -187,7 +210,15 @@ class TTStftKernel:
         chunk_start_time: float = 0.0,
     ) -> SpectrogramChunk:
         """
-        Process one audio chunk. Dispatch to TT-Lang if available, else NumPy.
+        Process one audio chunk.
+
+        Dispatch order:
+          1. TT-Lang fused STFT (if simulator or hardware available)
+          2. NumPy DFT-matmul fallback
+
+        If the TT-Lang dispatch raises any exception on the first attempt,
+        ``self._try_ttl`` is flipped to False so subsequent chunks skip the
+        import overhead and go straight to NumPy.
 
         Parameters
         ----------
@@ -198,7 +229,18 @@ class TTStftKernel:
         -------
         SpectrogramChunk
         """
-        # TT-Lang dispatch wired in Task 5; for now, NumPy path only
+        if self._try_ttl:
+            try:
+                from audio_analysis.core.tt_stft_sim import fused_stft_sim
+                return fused_stft_sim(audio_chunk, self, chunk_start_time)
+            except Exception as e:
+                log.warning(
+                    "TT-Lang dispatch failed (%s); falling back to NumPy", e
+                )
+                # Disable TT-Lang for all subsequent chunks in this session
+                # to avoid repeated import / dispatch overhead on a broken path.
+                self._try_ttl = False
+
         return self._process_chunk_numpy(audio_chunk, chunk_start_time)
 
     def process_file(

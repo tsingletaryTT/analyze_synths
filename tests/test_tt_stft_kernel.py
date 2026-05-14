@@ -204,3 +204,25 @@ def test_process_file_long_audio_no_oom():
     kernel = TTStftKernel(sr=sr, chunk_seconds=30.0, overlap_seconds=2.0)
     result = kernel.process_file(audio)  # should not raise
     assert result.mag.shape[0] > 0
+
+
+def test_process_chunk_uses_numpy_fallback_when_ttl_unavailable(monkeypatch):
+    """
+    When tt_stft_sim is not importable, process_chunk must fall back to NumPy.
+    The result should be identical to _process_chunk_numpy.
+    """
+    kernel = TTStftKernel(sr=22050)
+    audio = np.random.randn(22050).astype(np.float32) * 0.1
+
+    # Force NumPy fallback by patching the ttl availability check.
+    # Simulate that the TT-Lang import fails by disabling the dispatch flag.
+    original_try = kernel._try_ttl
+    kernel._try_ttl = False  # disable TT-Lang dispatch
+
+    chunk = kernel.process_chunk(audio, chunk_start_time=0.0)
+
+    # Should match NumPy reference
+    ref = kernel._process_chunk_numpy(audio, chunk_start_time=0.0)
+    np.testing.assert_allclose(chunk.mag, ref.mag, rtol=1e-5)
+
+    kernel._try_ttl = original_try
