@@ -84,6 +84,17 @@
   .cmp-card:not(.hl) .cmp-value { color: var(--text-dim); }
   .cmp-sub { font-size: 0.78rem; color: var(--text-mute); }
 
+  #clusters { padding: 4rem 0; border-bottom: 1px solid var(--border); }
+  .cluster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+  .cluster-card { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; }
+  .cluster-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.35rem; }
+  .cluster-size { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--teal); }
+  .cluster-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .cluster-meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim); margin-bottom: 0.8rem; }
+  .cluster-tracks { list-style: none; margin: 0; padding: 0; }
+  .cluster-tracks li { font-size: 0.72rem; color: var(--text-dim); padding: 0.1em 0; border-bottom: 1px solid var(--border); }
+  .cluster-tracks li:last-child { border-bottom: none; }
+  .cluster-tracks li.more { color: var(--text-mute); font-style: italic; }
   #stats { padding: 4rem 0; border-bottom: 1px solid var(--border); }
   .stats-rows { display: flex; flex-direction: column; gap: 1.2rem; margin-top: 1.5rem; }
   .stats-row { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
@@ -148,6 +159,7 @@
     <li><a href="#story">story</a></li>
     <li><a href="#benchmarks">benchmarks</a></li>
     <li><a href="#stats">stats</a></li>
+    <li><a href="#clusters">clusters</a></li>
     <li><a href="#library">library</a></li>
     <li><a href="#next">next</a></li>
     <li><a href="https://github.com/tsingletaryTT/analyze_synths">github</a></li>
@@ -307,6 +319,72 @@
     <div class="stats-row">
       <span class="stats-label">Key distribution</span>
       <span class="stats-pills"><span class="stat-pill">C <em>22</em></span><span class="stat-pill">F <em>11</em></span><span class="stat-pill">A <em>11</em></span><span class="stat-pill">E <em>9</em></span><span class="stat-pill">G <em>8</em></span><span class="stat-pill">D <em>7</em></span></span>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- clusters -->
+<section id="clusters">
+<div class="container">
+  <h2>Cluster groups</h2>
+  <p class="section-sub">K-means grouping by spectral and temporal similarity</p>
+  <div class="cluster-grid">
+    <div class="cluster-card">
+      <div class="cluster-header">
+        <span class="cluster-size">22 tracks</span>
+        <div class="cluster-tags"><span class="tag" style="border-color:#FF6B6B;color:#FF9999">percussive</span><span class="tag">sampler</span></div>
+      </div>
+      <div class="cluster-meta">
+        <span>110 BPM avg</span>
+        <span>4:31 avg</span>
+        <span>C key</span>
+        <span>73% climax</span>
+        <span>13 moods</span>
+      </div>
+      <ul class="cluster-tracks"><li>melody partially resolute tetrax</li><li>06 05 negative 60</li><li>09 17 caving in</li><li>09-25 while madeline sleeps</li><li>12-14 a quatrax cosmos memory</li><li class="more">+ 17 more</li></ul>
+    </div>
+    <div class="cluster-card">
+      <div class="cluster-header">
+        <span class="cluster-size">25 tracks</span>
+        <div class="cluster-tags"><span class="tag" style="border-color:#4a6070;color:#607D8B">expansive</span><span class="tag">sampler</span></div>
+      </div>
+      <div class="cluster-meta">
+        <span>116 BPM avg</span>
+        <span>5:29 avg</span>
+        <span>A key</span>
+        <span>64% climax</span>
+        <span>12 moods</span>
+      </div>
+      <ul class="cluster-tracks"><li>cricketeering</li><li>To An Ostrological Rocket Society</li><li>Do you like my hat_</li><li>Track 06</li><li>Track 07</li><li class="more">+ 20 more</li></ul>
+    </div>
+    <div class="cluster-card">
+      <div class="cluster-header">
+        <span class="cluster-size">1 tracks</span>
+        <div class="cluster-tags"><span class="tag" style="border-color:#4FD1C5;color:#81E6D9">atmospheric</span><span class="tag">wavetable synth</span></div>
+      </div>
+      <div class="cluster-meta">
+        <span>126 BPM avg</span>
+        <span>9:36 avg</span>
+        <span>D key</span>
+        
+        <span>1 moods</span>
+      </div>
+      <ul class="cluster-tracks"><li>04 13 centers</li></ul>
+    </div>
+    <div class="cluster-card">
+      <div class="cluster-header">
+        <span class="cluster-size">34 tracks</span>
+        <div class="cluster-tags"><span class="tag" style="border-color:#4FD1C5;color:#4FD1C5">synthetic</span><span class="tag">sampler</span></div>
+      </div>
+      <div class="cluster-meta">
+        <span>126 BPM avg</span>
+        <span>4:50 avg</span>
+        <span>C key</span>
+        <span>76% climax</span>
+        <span>11 moods</span>
+      </div>
+      <ul class="cluster-tracks"><li>12 20 chiminy biscuits</li><li>Zeppelins on the Empire - Spoken Word</li><li>Track 02</li><li>Track 04</li><li>Track 05</li><li class="more">+ 29 more</li></ul>
     </div>
   </div>
 </div>

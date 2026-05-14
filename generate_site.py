@@ -346,6 +346,47 @@ def generate(data):
     avg_bpm = f"{sum(bpm_vals)/len(bpm_vals):.0f}" if bpm_vals else "—"
     bpm_range = f"{min(bpm_vals):.0f}–{max(bpm_vals):.0f}" if bpm_vals else "—"
 
+    # Cluster cards
+    cluster_cards_html = ""
+    if cluster_data:
+        cluster_cards = []
+        for cid, cinfo in sorted(cluster_data.items()):
+            n = cinfo.get("track_count", 0)
+            cp = cinfo.get("creative_properties", {})
+            ch = cinfo.get("characteristics", {})
+            mp = cinfo.get("musical_properties", {})
+            dom_mood = cp.get("dominant_mood", "")
+            dom_char = cp.get("dominant_character", "")
+            mood_div = cp.get("mood_diversity", 0)
+            bpm_c = ch.get("avg_tempo", 0)
+            avg_dur = ch.get("avg_duration", 0)
+            pct_climax = mp.get("climax_percentage", 0)
+            common_key = mp.get("common_key", "")
+            # Colour the mood badge
+            mbc, mfc = MOOD_COLORS.get(dom_mood, DEFAULT_MOOD_COLOR)
+            mood_badge = f'<span class="tag" style="border-color:{mbc};color:{mfc}">{dom_mood}</span>' if dom_mood else ""
+            char_badge = f'<span class="tag">{dom_char.replace("_", " ")}</span>' if dom_char else ""
+            # Track sample names (first 5)
+            sample_names = [clean_name(f) for f in cinfo.get("track_files", [])[:5]]
+            sample_html = "".join(f'<li>{n}</li>' for n in sample_names)
+            if len(cinfo.get("track_files", [])) > 5:
+                sample_html += f'<li class="more">+ {len(cinfo["track_files"])-5} more</li>'
+            cluster_cards.append(f"""    <div class="cluster-card">
+      <div class="cluster-header">
+        <span class="cluster-size">{n} tracks</span>
+        <div class="cluster-tags">{mood_badge}{char_badge}</div>
+      </div>
+      <div class="cluster-meta">
+        <span>{bpm_c:.0f} BPM avg</span>
+        <span>{fmt_duration(avg_dur)} avg</span>
+        {f'<span>{common_key} key</span>' if common_key else ''}
+        {f'<span>{pct_climax:.0f}% climax</span>' if pct_climax else ''}
+        <span>{mood_div} moods</span>
+      </div>
+      <ul class="cluster-tracks">{sample_html}</ul>
+    </div>""")
+        cluster_cards_html = "\n".join(cluster_cards)
+
     # Build HTML
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -433,6 +474,17 @@ def generate(data):
   .cmp-card:not(.hl) .cmp-value {{ color: var(--text-dim); }}
   .cmp-sub {{ font-size: 0.78rem; color: var(--text-mute); }}
 
+  #clusters {{ padding: 4rem 0; border-bottom: 1px solid var(--border); }}
+  .cluster-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-top: 1.5rem; }}
+  .cluster-card {{ background: var(--bg-raised); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; }}
+  .cluster-header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.35rem; }}
+  .cluster-size {{ font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--teal); }}
+  .cluster-tags {{ display: flex; flex-wrap: wrap; gap: 0.3rem; }}
+  .cluster-meta {{ display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim); margin-bottom: 0.8rem; }}
+  .cluster-tracks {{ list-style: none; margin: 0; padding: 0; }}
+  .cluster-tracks li {{ font-size: 0.72rem; color: var(--text-dim); padding: 0.1em 0; border-bottom: 1px solid var(--border); }}
+  .cluster-tracks li:last-child {{ border-bottom: none; }}
+  .cluster-tracks li.more {{ color: var(--text-mute); font-style: italic; }}
   #stats {{ padding: 4rem 0; border-bottom: 1px solid var(--border); }}
   .stats-rows {{ display: flex; flex-direction: column; gap: 1.2rem; margin-top: 1.5rem; }}
   .stats-row {{ display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }}
@@ -497,6 +549,7 @@ def generate(data):
     <li><a href="#story">story</a></li>
     <li><a href="#benchmarks">benchmarks</a></li>
     <li><a href="#stats">stats</a></li>
+    <li><a href="#clusters">clusters</a></li>
     <li><a href="#library">library</a></li>
     <li><a href="#next">next</a></li>
     <li><a href="https://github.com/tsingletaryTT/analyze_synths">github</a></li>
@@ -657,6 +710,17 @@ def generate(data):
       <span class="stats-label">Key distribution</span>
       <span class="stats-pills">{top_keys_html}</span>
     </div>
+  </div>
+</div>
+</section>
+
+<!-- clusters -->
+<section id="clusters">
+<div class="container">
+  <h2>Cluster groups</h2>
+  <p class="section-sub">K-means grouping by spectral and temporal similarity</p>
+  <div class="cluster-grid">
+{cluster_cards_html}
   </div>
 </div>
 </section>
