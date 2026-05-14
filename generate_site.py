@@ -13,7 +13,7 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-JSON_PATH = Path("generated/full_library/full_library_data.json")
+JSON_PATH = Path("generated/full_library/audio_analysis_20260514_102446/reports/full_library_data.json")
 OUT_PATH  = Path("docs/index.html")
 
 # --- Mood color palette (matches existing CSS vars) ---
@@ -242,8 +242,12 @@ def generate(data):
     total_phases = int(summary.get("total_phases", sum(len(v) for v in phase_by_file.values())))
     n_clusters = len(cluster_data) if cluster_data else "?"
 
+    # Unwrap sequence_recommendations if it's a dict with a "sequence" key
+    if isinstance(seq, dict):
+        seq = seq.get("sequence", [])
+
     # Sort tracks by sequence if available, else alphabetically
-    seq_order = {item["filename"]: i for i, item in enumerate(seq)} if seq else {}
+    seq_order = {item["filename"]: item.get("position", i) for i, item in enumerate(seq)} if seq else {}
     sorted_tracks = sorted(
         tracks,
         key=lambda t: seq_order.get(t.get("filename", ""), 9999)
