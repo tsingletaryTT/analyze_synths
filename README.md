@@ -1,680 +1,387 @@
-# 🎹 Synthesizer Music Analysis Toolkit
+# analyze_synths
 
-A comprehensive, modular audio analysis toolkit designed specifically for composers and synthesizer music creators. This toolkit goes beyond academic metrics to provide intuitive, creative insights into your music using descriptors like "spacey," "organic," "crystalline," and "oozy."
+**A composer's experiment in teaching hardware to hear music.**
 
-## ✨ Features
+This started as a personal tool for making sense of a growing library of synthesizer pieces. It became a journey through custom DSLs, Blackhole silicon, JAX kernels, and temporal narrative analysis. Here's the story.
 
-### 🎵 Creative Mood Analysis
-- **117 Creative Descriptors**: Core (9), Extended (8), Advanced (100) - from spacey and organic to tempestuous, celestial, velvet, and microscopic
-- **Character Classification**: 59 tags across synthesis types, textures, and processing - from analog synths to crystalline textures to reverbed atmospheres
-- **Phase-by-Phase Analysis**: Detailed breakdown of each musical section with mood descriptors
+---
 
-### 🎯 Intelligent Song Sequencing
-- **Automatic Playlist Generation**: Creates optimal listening sequences based on musical flow principles
-- **Key Compatibility**: Uses circle of fifths relationships for smooth transitions
-- **Energy Arc Management**: Builds natural progression from atmospheric to climactic sections
-- **Tempo Progression**: Ensures gradual tempo changes for better flow
+## The Problem
 
-### 📊 Comprehensive Analysis
-- **Musical Phase Detection**: Automatically identifies intro, development, climax, and conclusion sections
-- **Cluster Analysis**: Groups similar tracks for themed playlists
-- **Creative Insights**: Understand your compositional patterns and sound palette
-- **Multiple Export Formats**: CSV, JSON, and Markdown reports optimized for further analysis
+I write a lot of synthesizer music — long-form ambient pieces, generative drones, evolving textures. After a few years the library was big enough that I couldn't remember what was in it. Which tracks share a character? Which one would flow naturally into which other? Is that patch I made in 2021 "crystalline" or "granular"? Is there a climax around the 4-minute mark or does the tension just plateau?
 
-## 🏗️ Architecture
+Standard audio analysis tools give you BPM and key. Not very useful when the track has no tempo and the key is ambiguous.
 
-### New Modular Design with Parallel Processing (v2.1)
-The toolkit has been completely refactored into a professional Python package structure with comprehensive parallel processing capabilities:
+So I built something that speaks a different language: *spacey, organic, droning, prismatic, cavernous, velvet*. Creative vocabulary for creative work.
+
+---
+
+## v1: Creative Feature Extraction
+
+The first version was a monolithic script around librosa. It extracted 80+ features per track — spectral centroid, roughness, chroma spread, zero-crossing rate, spectral bandwidth — and mapped them through empirically-tuned thresholds to a vocabulary of 176 descriptors:
+
+**9 core moods**: spacey, organic, synthetic, oozy, pensive, tense, exuberant, glitchy, chaos
+
+**8 extended moods**: ethereal, atmospheric, crystalline, warm, melodic, driving, percussive, droning
+
+**100 advanced moods**: velvet, gossamer, tempestuous, cavernous, sforzando, fractal, volcanic, and 93 more
+
+**59 character tags**: analog_synth, granular_synth, mellotron, pad_synth, reverbed, tape_saturated...
+
+It also did K-means clustering across the library, detected musical phases (intro/development/climax/conclusion), and generated optimal listening sequences using key compatibility and energy arc principles.
+
+This worked well. The results felt right. The problem was speed.
+
+---
+
+## v2: The Architecture Problem
+
+When the library grew to 100+ files — many of them 10-minute ambient pieces — the monolithic script started hitting memory walls. STFT on 11 minutes of audio at 22050 Hz allocates a dense complex matrix before any analysis begins. Librosa's `stft()` is not streaming-friendly.
+
+The solution was to redesign around streaming chunks and express the core computation in a form that hardware could accelerate.
+
+The key insight: **STFT is just two matrix multiplications**. A DFT of a windowed frame is:
 
 ```
-audio_analysis/
-├── __init__.py                 # Main package interface with parallel components
-├── core/                       # Core analysis algorithms
-│   ├── feature_extraction.py   # 80+ audio features with detailed comments
-│   ├── feature_extraction_base.py  # 🆕 Shared feature extraction core
-│   ├── parallel_feature_extraction.py  # 🆕 Parallel feature extraction
-│   ├── phase_detection.py      # Musical structure detection
-│   ├── clustering.py           # K-means clustering for track grouping
-│   ├── parallel_clustering.py  # 🆕 Distributed clustering with tensor support
-│   ├── tensor_operations.py    # 🆕 Hardware-agnostic tensor processing
-│   └── sequencing.py           # Intelligent song ordering
-├── analysis/                   # Creative interpretation modules
-│   ├── mood_analyzer.py        # 117 creative mood descriptors
-│   ├── character_analyzer.py   # 59 character tags (synthesis, texture, processing)
-│   └── descriptors.py          # Comprehensive descriptor definitions and thresholds
-├── utils/                      # Support utilities
-│   ├── audio_io.py            # File loading and validation
-│   ├── data_processing.py     # Data cleaning and standardization
-│   ├── visualization.py       # Publication-quality plots
-│   ├── type_conversion.py     # Centralized type conversion utilities
-│   ├── validation.py          # Shared validation functions
-│   └── statistics.py          # Statistical calculation utilities
-├── exporters/                  # Output format handlers
-│   ├── csv_exporter.py        # CSV export for spreadsheets
-│   ├── json_exporter.py       # JSON for programmatic access
-│   └── markdown_exporter.py   # Human-readable reports
-├── api/                        # Main interfaces
-│   ├── analyzer.py            # Primary AudioAnalyzer class
-│   ├── parallel_analyzer.py   # 🆕 ParallelAudioAnalyzer for scalable processing
-│   └── mcp_server.py          # FastMCP server integration
-└── cli/                        # Command-line interface
-    └── main.py                # Enhanced CLI with extensive options
+cos_proj = frame @ cos_basis   # (n_fft,) × (n_fft, n_freqs) → (n_freqs,)
+sin_proj = frame @ sin_basis
+mag = sqrt(cos_proj² + sin_proj² + ε)
 ```
 
-### Key Architectural Improvements (v2.1)
+And then the mel filterbank is a third:
 
-**🚀 Parallel Processing:**
-- **6x+ Performance**: Multi-core processing with automatic optimization
-- **Tensor-Ready**: Data structures optimized for hardware acceleration
-- **Scalable**: Configurable batch sizes and memory limits
-- **Hardware-Agnostic**: CPU, GPU, and future Tenstorrent processor support
-
-**🔧 Code Quality:**
-- **Single Source of Truth**: Shared feature extraction core eliminates duplication
-- **Consistent Results**: Traditional and parallel processing produce identical outputs
-- **Easy Extension**: Add new moods and characters in one location
-- **Better Testing**: Comprehensive test coverage with shared utilities
-
-**⚡ Performance Benchmarks:**
-- **Feature Extraction**: 6.7x speedup (8 cores)
-- **Phase Detection**: 5.6x speedup (8 cores)  
-- **Clustering**: 5.0x speedup (8 cores)
-- **Total Analysis**: 6.1x speedup (8 cores)
-
-## 🚀 Quick Start
-
-### Installation
-```bash
-# Clone or download the project
-cd analyze_synths
-
-# Create virtual environment
-python -m venv .
-
-# Activate virtual environment
-source bin/activate  # On macOS/Linux
-# or
-.\Scripts\activate  # On Windows
-
-# Install dependencies
-pip install -r requirements.txt
+```
+mel = mag @ mel_filter   # (n_freqs,) × (n_freqs, n_mels) → (n_mels,)
 ```
 
-### Usage Options
+Three matmuls, precomputed static matrices, pure float32. This is exactly what Tenstorrent Tensix cores are designed to do.
 
-#### 🎵 Local Directory Analysis (Multiple Options)
+---
 
-**Option 1: Wrapper Script (Easiest)**
-```bash
-# Basic analysis - uses wrapper script
-python analyze_library.py /path/to/your/music/directory
+## Plan 1: TTStftKernel and the TT-Lang DSL
 
-# With custom clustering
-python analyze_library.py /path/to/music --clusters 3
+The first hardware target was the TT-Lang simulator — a Python DSL for writing Tensix dataflow kernels that can run on a local simulator before touching real hardware.
 
-# Export in specific format
-python analyze_library.py /path/to/music --export-format markdown
+### The TT-Lang kernel design
 
-# Get processing time estimate
-python analyze_library.py /path/to/music --estimate
+TT-Lang kernels (`@ttl.operation`) run on a (grid_x, grid_y) array of Tensix cores. Each core has L1 SRAM for staging tiles, a DRAM interface, and dataflow buffers (DFBs) for producer-consumer communication between reader, compute, and writer threads.
 
-# Verbose output for debugging
-python analyze_library.py /path/to/music --verbose
+The STFT required two separate `@ttl.operation` kernels because a DataflowBuffer cannot be simultaneously written by compute and read by the reader in the same operation:
 
-# Show supported formats and capabilities
-python analyze_library.py --info
+**Kernel 1 — `_stft_compute_mag`**: frames × DFT basis → magnitude
+```
+for ft in range(FT):           # frame tiles
+    for nt in range(NT):       # frequency tiles
+        for kt in range(KT):   # K-reduction (n_fft tiles)
+            c_acc += frame[ft,kt] @ cos[kt,nt]
+            s_acc += frame[ft,kt] @ sin[kt,nt]
+        mag[ft,nt] = sqrt(c_acc² + s_acc²)
 ```
 
-**Option 2: Direct Module Access**
-```bash
-# Same functionality, different invocation method
-python -m audio_analysis.cli.main /path/to/your/music/directory
-
-# All other options work the same way
-python -m audio_analysis.cli.main /path/to/music --clusters 3
-python -m audio_analysis.cli.main --info
+**Kernel 2 — `_stft_compute_mel`**: magnitude × mel filterbank → mel spectrogram
+```
+for ft in range(FT):
+    for mt in range(MT):       # mel band tiles
+        for nt in range(NT):   # N-reduction (n_freqs tiles)
+            acc += mag[ft,nt] @ mel[nt,mt]
 ```
 
-**Option 3: Parallel Processing Demo (NEW v2.1)**
-```bash
-# Run parallel processing demonstration
-python parallel_demo.py /path/to/music --workers 8 --batch-size 16
+A critical constraint: reader and compute threads must iterate in **identical loop order** or tiles arrive out of sequence and produce silently wrong results.
 
-# Enable tensor optimizations for hardware acceleration
-python parallel_demo.py /path/to/music --enable-tensor --device cpu
+All tensor dimensions must be multiples of TILE=32:
+- n_fft=2048: already aligned (64 tiles)
+- n_mels=128: already aligned (4 tiles)
+- n_freqs=1025: **not aligned** → padded to 1056 (33×32)
+- n_frames: varies → padded to nearest multiple of 32
 
-# Run specific demo modes
-python parallel_demo.py /path/to/music --demo extraction    # Feature extraction only
-python parallel_demo.py /path/to/music --demo clustering    # Clustering only
-python parallel_demo.py /path/to/music --demo complete      # Full analysis
+### Streaming design
+
+`TTStftKernel` processes audio in 30-second chunks with 2-second overlap. The overlap prevents edge artifacts at chunk boundaries. Overlap frames are discarded from subsequent chunks using exact global-sample-center arithmetic rather than a fixed discard count — this gives ±1 frame accuracy regardless of audio length or chunk size.
+
+The dispatch chain:
+1. JAX PJRT hardware (if TT device detected)
+2. TT-Lang simulator (if sim importable, no HW)
+3. NumPy fallback (always available)
+
+If a path fails on first use, its flag flips to False and subsequent chunks skip the failed import entirely.
+
+---
+
+## The Hardware Journey
+
+The simulator path worked. The NumPy fallback was our ground truth. Then the actual hardware arrived.
+
+**Four P300C Blackhole chips** in a P150X4 mesh configuration. All four confirmed working via `tt-smi`. Getting JAX to speak to them was not straightforward.
+
+### What didn't work
+
+**tt-metal Python env**: The `open_device()` call was hardcoded for a 2-chip P300. The 4-chip mesh triggered a crash.
+
+**tt-xla venv**: An older PJRT plugin binary had an undefined symbol in the mlir namespace. The shared object loaded but JAX couldn't initialize the device.
+
+**Every path that looked obvious**: Wrong.
+
+### What worked
+
+The correct stack:
+```
+/home/ttuser/p300c-xla-test/lib/python3.12/site-packages   ← JAX + PJRT support libs
+/home/ttuser/tt-xla/python_package/pjrt_plugin_tt/pjrt_plugin_tt.so  ← plugin binary
+__editable___pjrt_plugin_tt_0_1_260226_dev_c67d612a_finder  ← editable install finder
 ```
 
-#### 🌐 MCP Server Mode (Multiple Options)
+With `jax.config.update("jax_platform_name", "tt")`, `jax.devices("tt")` returns all 4 chips. The mesh is real.
 
-**Option 1: Wrapper Script (Easiest)**
-```bash
-# Start MCP server - uses wrapper script
-python mcp_server.py
+### The JAX PJRT kernel
 
-# For use with FastMCP directly
-fastmcp run mcp_server.py
-```
+Once the environment was found, the kernel became simple. JAX's `@jax.jit` compiles the computation graph for the TT backend on first call, then reuses the binary:
 
-**Option 2: Via analyze_library.py wrapper**
-```bash
-# Start MCP server with default settings
-python analyze_library.py --mode mcp
-
-# Start on custom host/port
-python analyze_library.py --mode mcp --host 0.0.0.0 --port 8080
-```
-
-**Option 3: Direct Module Access**
-```bash
-# Direct module invocation
-python -m audio_analysis.cli.main --mode mcp
-
-# With custom settings
-python -m audio_analysis.cli.main --mode mcp --host 0.0.0.0 --port 8080
-```
-
-#### 🐍 Python API Usage
-
-**Standard Analysis:**
 ```python
-from audio_analysis import AudioAnalyzer
-
-# Initialize analyzer
-analyzer = AudioAnalyzer('/path/to/audio/files')
-
-# Run complete analysis
-df = analyzer.analyze_directory()
-
-# Perform clustering
-cluster_labels, centers, features = analyzer.perform_clustering()
-
-# Generate sequence recommendations  
-sequence = analyzer.recommend_sequence()
-
-# Export all results (default: all formats)
-export_info = analyzer.export_comprehensive_analysis()
-
-# Export specific formats
-export_info = analyzer.export_comprehensive_analysis(export_format="markdown")
-export_info = analyzer.export_comprehensive_analysis(export_format="json", base_name="my_analysis")
+@jax.jit
+def _stft_jit(frames_j, cos_j, sin_j, mel_j):
+    cos_proj = jnp.matmul(frames_j, cos_j)
+    sin_proj = jnp.matmul(frames_j, sin_j)
+    mag_j    = jnp.sqrt(cos_proj * cos_proj + sin_proj * sin_proj + 1e-8)
+    mel_o    = jnp.matmul(mag_j, mel_j)
+    return mag_j, mel_o
 ```
 
-**Parallel Processing (NEW v2.1):**
+**JIT shape strategy**: n_frames varies per audio file, but JIT recompiles on shape change. Solution: pad all chunks to `_STANDARD_N_FRAMES_PAD = 1376` — the frame count for a full 30s+2s chunk at sr=22050, hop=512. One JIT binary serves all standard chunks. Only pathologically long chunks (edge case) would trigger recompilation.
+
+**Basis matrix caching**: The cos/sin/mel matrices are precomputed at `TTStftKernel.__init__()` and transferred to TT device memory exactly once per kernel instance. The `_DEVICE_BASES` dict keyed by `id(kernel)` holds the device-resident tensors. Subsequent chunks reuse them — only the audio frames transfer each call.
+
+### Precision note
+
+The hardware path stays in float32 throughout. NumPy's reference path uses float64 intermediate arithmetic (the `1e-8` literal upcasts the sqrt operands). Over K=2048 accumulation steps, this produces ~1.2% mean relative error — fundamental float32 behavior, not a bug. The parity test allows 2%.
+
+---
+
+## Benchmark Results
+
+Test library: 8 synthesizer pieces, 2.5–11.5 minutes each, 59.8 minutes total audio.
+
+### Per-file hardware timing (JIT warmed up)
+
+```
+╔════════════════════════════════════════════════════════
+║  File                                    Duration  HW time   RTF
+╠════════════════════════════════════════════════════════
+║  2020 cricketeering.aif                   6.3 min   0.10 s   3693x
+║  2021 12 20 chiminy biscuits.aif          5.5 min   0.08 s   4013x
+║  2021 melody partially resolute tetrax.   2.5 min   0.04 s   3497x
+║  2022 06 05 negative 60.aif               4.2 min   0.06 s   3880x
+║  2022 09 17 caving in.aif                 9.5 min   0.14 s   4074x
+║  2022-09-25 while madeline sleeps.aif    10.7 min   0.16 s   3997x
+║  2022-12-14 a quatrax cosmos memory.aif  11.5 min   0.18 s   3941x
+║  2023 04 13 centers.aif                   9.6 min   0.14 s   3983x
+╠════════════════════════════════════════════════════════
+║  Total                                   59.8 min    0.9 s   3931x
+╚════════════════════════════════════════════════════════
+```
+
+### Comparison
+
+```
+╔═══════════════════════════════════════════════
+║  Backend    Time     Real-time factor
+╠═══════════════════════════════════════════════
+║  TT HW      0.9 s    3,931x
+║  NumPy      2.9 s    1,256x
+╠═══════════════════════════════════════════════
+║  Speedup    3.2x
+╚═══════════════════════════════════════════════
+```
+
+60 minutes of audio analyzed in under a second. The bottleneck has moved entirely off the STFT kernel.
+
+---
+
+## Plan 2: Temporal Narrative Analysis
+
+Fast STFT opened a door. If we can compute spectrogram features for an entire library in under a second, we can afford much richer temporal analysis.
+
+The question became: **what does this piece do over time?**
+
+Not just "this track is spacey and droning" but "it opens with diffuse tension, crystallizes around the 3-minute mark, briefly destabilizes, then resolves into a warm drone for the final 90 seconds."
+
+### TrajectoryAnalyzer
+
+The trajectory is a time series of `TrajectoryPoint` structs, one per 2-second window:
+
 ```python
-from audio_analysis import ParallelAudioAnalyzer, ProcessingConfig
-
-# Configure parallel processing
-config = ProcessingConfig(
-    max_workers=8,                    # Use 8 CPU cores
-    batch_size=16,                    # Process 16 files per batch
-    enable_tensor_optimization=True,  # Enable tensor operations
-    memory_limit_mb=4096             # 4GB memory limit
-)
-
-# Initialize parallel analyzer
-analyzer = ParallelAudioAnalyzer('/path/to/audio/files', config)
-
-# Same interface as standard analyzer
-df = analyzer.analyze_directory()
-cluster_labels, centers, features = analyzer.perform_clustering()
-sequence = analyzer.recommend_sequence()
-export_info = analyzer.export_comprehensive_analysis(export_format="all")
-
-# Get parallel processing statistics
-stats = analyzer.get_processing_statistics()
-print(f"Parallel speedup: {stats['parallel_processing_stats']['parallel_speedup']:.1f}x")
-print(f"Throughput: {stats['parallel_processing_stats']['throughput']:.1f} files/second")
+@dataclass
+class TrajectoryPoint:
+    time: float
+    energy: float
+    brightness: float
+    roughness: float
+    zcr: float
+    chroma_peak: float
+    chroma_spread: float
+    tension_score: float
 ```
 
-**Hardware Acceleration (Future-Ready):**
+Tension is computed as a weighted combination of normalized features:
+
+```
+tension = 0.35 * energy_norm
+        + 0.25 * roughness_norm
+        + 0.20 * (1 - chroma_spread_norm)   # tonal focus = more tension
+        + 0.20 * zcr_norm
+```
+
+This gives a single 0–1 value that tracks when a piece is building, releasing, or holding.
+
+### NarrativeAnalyzer
+
+Change-point detection finds section boundaries where the trajectory shifts meaningfully (threshold=0.15, minimum section length 15s, maximum 60s). Each section is classified into one of 7 types by its tension arc shape: whether tension rises, falls, holds high, holds low, peaks, valleys, or fluctuates.
+
+Each section gets:
+- Dominant mood (from MoodAnalyzer on the section's average features)
+- Dominant character tag (from CharacterAnalyzer)
+- Instruments/textures detected
+- Tension arc summary (direction, rate, type)
+- motion_in and motion_out descriptors for transitions
+
+The section analysis feeds a template-driven prose generator that produces readable English:
+
+> *"The opening movement establishes an atmospheric texture with crystalline character — tension is low and stable. Around 3:14, roughness increases sharply and chroma focus tightens: the piece enters its most tense passage. The climax sustains for 47 seconds before a measured release brings it back to the opening character."*
+
+### CrossPieceSimilarity
+
+Each `NarrativeResult` carries two fingerprints:
+
+- **structure_fingerprint** (35 dims): section-count, duration, tension stats, arc shape distribution, phase timing
+- **texture_fingerprint** (10 dims): average spectral features across the piece
+
+Similarity between two pieces:
+
+```
+score = 0.6 * cosine(structure_A, structure_B)
+      + 0.4 * cosine(texture_A, texture_B)
+```
+
+Structure dominates because two pieces can sound different but move the same way — and those structural siblings are the interesting ones to sequence together.
+
+The `compute_library()` call populates `similar_to` for every piece with its top-3 neighbors.
+
+### MCP Tool
+
+The `query_narrative` MCP tool makes this accessible to AI assistants without re-running analysis:
+
 ```python
-from audio_analysis import TensorFeatureExtractor
-
-# CPU processing with tensor optimizations
-extractor = TensorFeatureExtractor(device="cpu")
-features = extractor.extract_features_from_paths(audio_file_paths)
-
-# Tenstorrent processing (when available)
-extractor = TensorFeatureExtractor(device="tenstorrent", device_id=0)
-features = extractor.extract_features_from_paths(audio_file_paths)
+query_narrative(directory="/path/to/library", filename="cricketeering.aif", query="what happens at 3:30")
+query_narrative(directory=..., filename=..., query="describe the emotional arc")
+query_narrative(directory=..., filename=..., query="find the climax")
+query_narrative(directory=..., filename=..., query="find similar pieces")
 ```
 
-**Export Format Options (NEW v2.2):**
-```python
-from audio_analysis import AudioAnalyzer
+Pre-computed JSON files on disk — no re-analysis, instant response.
 
-analyzer = AudioAnalyzer('/path/to/audio/files')
-analyzer.analyze_directory()
+### Results on the test library
 
-# Export all formats (default: CSV data + JSON + Markdown + visualizations)
-analyzer.export_comprehensive_analysis()
-
-# Export only specific formats for faster processing
-analyzer.export_comprehensive_analysis(export_format="markdown")  # Human-readable report only
-analyzer.export_comprehensive_analysis(export_format="json")     # Programmatic data only  
-analyzer.export_comprehensive_analysis(export_format="csv")      # Spreadsheet data only
-
-# Customize file naming
-analyzer.export_comprehensive_analysis(
-    export_format="json", 
-    base_name="my_project"
-)  # → Creates: my_project_data.json
-
-# Full customization
-analyzer.export_comprehensive_analysis(
-    export_dir="/custom/path",
-    export_format="markdown", 
-    base_name="album_analysis",
-    show_plots=True
-)  # → Creates: album_analysis_comprehensive_report.md
 ```
-
-## 📁 What You Get
-
-Each analysis creates a timestamped directory with organized results:
-
-### 📈 Data Files (CSV format)
-- `audio_features.csv` - Complete feature matrix (80+ features per track)
-- `cluster_analysis.csv` - Musical groupings and characteristics
-- `phase_analysis.csv` - Detailed phase breakdown with mood descriptors
-- `sequence_recommendations.csv` - Optimal track ordering with reasoning
-- `summary_statistics.csv` - High-level collection insights
-
-### 🎨 Visualizations
-- `phase_timeline.png` - Visual timeline of musical phases for all tracks
-- `cluster_analysis.png` - Multi-panel cluster visualization with PCA
-- `mood_distribution.png` - Mood analysis across your collection
-- `sequence_recommendations.png` - Visual representation of optimal flow
-
-### 📝 Reports
-- `comprehensive_analysis_report.md` - **The main report** with:
-  - Executive summary with key insights
-  - Recommended listening sequence with detailed reasoning
-  - Track-by-track mood and character analysis
-  - Phase-by-phase structural breakdown
-  - Cluster analysis for playlist creation
-  - Creative insights and compositional recommendations
-- `analysis_data.json` - Complete analysis data for programmatic access
-
-## 🎼 Understanding Your Music
-
-### Mood Descriptors (117 Total)
-**Core Moods:**
-- **Spacey**: Low energy, ethereal, expansive atmospheres
-- **Organic**: Natural textures, acoustic-like characteristics  
-- **Synthetic**: Clean, precise, distinctly electronic
-- **Oozy**: Slow, flowing, liquid-like textures
-- **Pensive**: Contemplative, moderate energy, thoughtful
-- **Tense**: High energy, sharp, angular characteristics
-- **Exuberant**: Joyful, high energy, bright
-- **Glitchy**: Fragmented, stuttering, digital artifacts
-- **Chaos**: Extreme energy, unpredictable, intense
-
-**Extended Moods:**
-- **Ethereal**: Delicate, floating, otherworldly
-- **Atmospheric**: Environmental, ambient, immersive
-- **Crystalline**: Clear, precise, bell-like
-- **Warm**: Comfortable, enveloping, intimate
-- **Melodic**: Tuneful, songlike, memorable
-- **Driving**: Forward-moving, rhythmic, propulsive
-- **Percussive**: Rhythmic, transient, beat-focused
-- **Droning**: Sustained, minimal, hypnotic
-
-### Character Tags (59 Total)
-The expanded character system now includes three comprehensive categories:
-
-**Synthesis Types (25 total):**
-- **Analog Synth**: Warm, vintage synthesizer characteristics
-- **Digital Synth**: Clean, precise digital synthesis
-- **FM Synth**: Complex harmonic interactions from frequency modulation
-- **Granular Synth**: Fragmented, particulate textures
-- **Wavetable Synth**: Morphing spectral evolution
-- **Physical Modeling**: Realistic acoustic behavior through physics simulation
-- **Subtractive/Additive Synth**: Filtered or harmonic-stacked synthesis
-- **Modular Synth**: Experimental, unpredictable characteristics
-- **Pad/Lead/Bass/Arp Synth**: Role-specific synthesizer voices
-- **Piano/Organ/Choir/Brass/Woodwind**: Acoustic instrument emulations
-- **Drum Machine/Sampler**: Rhythmic and sampling-based sources
-- **Plus 10 additional specialized synthesis types**
-
-**Texture Types (20 total):**
-- **Rich/Pure Texture**: Complex layered vs. simple clean textures
-- **Bright/Warm Harmonics**: High vs. low frequency emphasis
-- **Smooth/Rough Texture**: Silky vs. gritty surface characteristics
-- **Crystalline/Organic Texture**: Glass-like precision vs. natural breathing
-- **Mechanical/Liquid Texture**: Industrial precision vs. flowing fluidity
-- **Metallic/Wooden/Glassy**: Material-inspired sonic characteristics
-- **Fabric/Sandy/Rubbery**: Tactile texture associations
-- **Plus 8 additional texture descriptors**
-
-**Processing Types (14 total):**
-- **Reverbed/Delayed**: Spatial effects and echo patterns
-- **Chorused/Flanged/Phased**: Modulation-based effects
-- **Distorted/Filtered**: Harmonic saturation and frequency shaping
-- **Compressed/Pitched**: Dynamic control and frequency shifting
-- **Ring Modulated**: Metallic, inharmonic characteristics
-- **Bit Crushed**: Digital degradation and lo-fi character
-- **Tape/Tube Saturated**: Vintage warmth and harmonic distortion
-- **Plus 5 additional processing characteristics**
-
-## 🎯 Creative Applications
-
-### For Composers
-- **Study Your Patterns**: Understand your compositional tendencies through data
-- **Album Sequencing**: Use AI-generated optimal listening sequences
-- **Sound Palette Analysis**: Identify your dominant musical characteristics
-- **Structural Insights**: Learn from phase analysis of your work
-- **Mood Development**: Track emotional progression in your compositions
-
-### For Producers
-- **Playlist Creation**: Use cluster analysis for themed collections
-- **Remix Planning**: Find compatible phases and sections across tracks
-- **Energy Management**: Plan DJ sets using detailed energy progression data
-- **Mood Matching**: Pair tracks with complementary emotional characteristics
-- **Track Selection**: Find similar tracks for consistent album flow
-
-### For Musicians
-- **Practice Planning**: Sequence practice sessions using energy flow principles
-- **Performance Sets**: Create dynamic live performance sequences
-- **Collaboration**: Share detailed analysis with band members and collaborators
-- **Inspiration**: Discover hidden patterns in your creative process
-- **Learning**: Understand how your music affects listeners emotionally
-
-## 🛠 Technical Requirements
-
-- **Python 3.8+** (Developed and tested on 3.13)
-- **Audio Formats**: WAV, AIFF, MP3 (WAV recommended for best quality)
-- **Memory**: 4GB+ RAM for large collections (100+ files)
-- **Storage**: Analysis exports typically 1-50MB per session
-- **Dependencies**: All handled by requirements.txt
-
-## 📊 Sample Output
-
-### Command Line
-```bash
-$ python analyze_library.py /Users/composer/my_tracks
-
-Initializing audio analyzer for: /Users/composer/my_tracks
-Found 12 audio files. Processing...
-Processing 1/12: ambient_dawn.wav
-Processing 2/12: crystalline_patterns.wav
-...
-
-✓ CSV files exported to data/
-✓ Plots saved to images/  
-✓ Markdown report saved to comprehensive_analysis_report.md
-✓ JSON results saved to analysis_data.json
-
-============================================================
-ANALYSIS COMPLETE
-============================================================
-Files processed: 12
-Features extracted: 89
-Phases detected: 47
-Clusters created: 3
-Export directory: /Users/composer/my_tracks/audio_analysis_20241213_143022
-```
-
-### Sequence Recommendations
-```
-RECOMMENDED LISTENING SEQUENCE
-==============================================================
-
-1. ambient_dawn.wav
-   atmospheric • analog_synth • 3:45 • 72 BPM • C
-   Opening track - sets the mood with atmospheric atmosphere
-
-2. crystalline_patterns.wav  
-   crystalline • digital_synth • 4:20 • 85 BPM • G
-   Early exploration - introduces digital_synth textures
-
-3. organic_flow.wav
-   organic • mellotron • 5:12 • 92 BPM • G  
-   Core development - showcases organic at 92 BPM
-```
-
-## 🌐 MCP Server Tools
-
-When running in MCP mode, six powerful tools are available for remote analysis:
-
-### 🎭 `analyze_audio_mood`
-Comprehensive mood and character analysis with confidence scores
-- **Input**: Audio files (base64 encoded)
-- **Output**: 117 mood descriptors, 59 character tags, musical metrics
-
-### 🎵 `analyze_audio_phases`
-Musical structure detection with mood analysis per section
-- **Input**: Audio files (base64 encoded)  
-- **Output**: Detailed phase breakdown with timing and characteristics
-
-### 🎼 `recommend_song_sequence`
-AI-powered optimal listening sequence generation
-- **Input**: Multiple audio files (base64 encoded)
-- **Output**: Recommended order with detailed reasoning
-
-### 🎯 `analyze_audio_clusters`
-K-means clustering for musical similarity grouping
-- **Input**: Audio files and optional cluster count
-- **Output**: Cluster analysis with musical groupings and characteristics
-
-### 🎨 `comprehensive_audio_analysis`
-Complete analysis pipeline with all features
-- **Input**: Audio files and export format preference
-- **Output**: Full analysis with mood, phases, clustering, and sequencing
-
-### ℹ️ `get_supported_formats`
-System capabilities and format information
-- **Input**: None
-- **Output**: Supported formats, descriptors, analysis capabilities
-
-## 🔧 Advanced Features
-
-### 🚀 Parallel Processing (NEW v2.1)
-- **Multi-Core Processing**: Automatic utilization of all available CPU cores
-- **Configurable Batching**: Process multiple files simultaneously with optimized memory usage
-- **Performance Scaling**: 6x+ speedup on multi-core systems
-- **Hardware Acceleration**: Tensor-optimized data structures for future acceleration
-- **Memory Management**: Intelligent memory usage with configurable limits
-
-### 🏗️ Hardware Acceleration Ready
-- **Tensor Operations**: Data structures optimized for Tenstorrent processors
-- **Device Abstraction**: Hardware-agnostic interface supports CPU, GPU, and specialized processors
-- **Batch Processing**: Optimal utilization of parallel processing units
-- **Memory Efficiency**: Minimize data movement between processing units
-- **Future-Proof**: Easy integration with emerging hardware acceleration platforms
-
-### 📊 Comprehensive Performance Monitoring
-- **Processing Statistics**: Detailed performance metrics and throughput analysis
-- **Parallel Speedup**: Real-time calculation of performance improvements
-- **Memory Usage**: Monitoring and optimization of memory consumption
-- **Error Tracking**: Comprehensive error handling and reporting
-- **Benchmarking**: Built-in performance benchmarking tools
-
-### 🎯 Extensible Architecture
-- **Single Source of Truth**: Add new mood descriptors in one place
-- **Consistent Analysis**: Traditional and parallel processing produce identical results
-- **Easy Extension**: Simple framework for adding new creative descriptors
-- **Modular Design**: Clean separation of concerns for easy maintenance
-- **Comprehensive Testing**: Shared utilities ensure consistent behavior
-
-### Extensive Inline Documentation
-Every analytical approach is thoroughly documented with:
-- **Why this method**: Explanation of creative relevance
-- **How it works**: Technical implementation details  
-- **Parameter choices**: Justification for thresholds and settings
-- **Musical context**: Connection to composition and music theory
-
-### Robust Error Handling
-- **File validation**: Comprehensive format and content checking
-- **Graceful degradation**: Analysis continues even with problematic files
-- **Memory management**: Efficient processing of large collections
-- **Progress reporting**: Detailed feedback during long operations
-
-### Professional Export Options
-- **CSV**: Optimized for spreadsheet analysis and data science
-- **JSON**: Structured data for programmatic access and APIs
-- **Markdown**: Human-readable reports with musical insights
-- **Visualizations**: Publication-quality plots and charts
-
-## 🔧 Troubleshooting
-
-### Common Issues
-- **Out of Memory**: Process files in smaller batches, increase system RAM
-- **MP3 Issues**: Install additional codecs, convert to WAV for best results
-- **No Files Found**: Verify audio files are in supported formats (WAV, AIFF, MP3)
-- **Import Errors**: Ensure all dependencies installed: `pip install -r requirements.txt`
-- **MCP Server Issues**: Install FastMCP: `pip install fastmcp`
-
-### Getting Help
-```bash
-# Show detailed help (any method works)
-python analyze_library.py --help
-python -m audio_analysis.cli.main --help
-
-# Show format information  
-python analyze_library.py --info
-python -m audio_analysis.cli.main --info
-
-# Estimate processing time
-python analyze_library.py /path/to/files --estimate
-python -m audio_analysis.cli.main /path/to/files --estimate
-
-# Run with verbose output for debugging
-python analyze_library.py /path/to/files --verbose
-python -m audio_analysis.cli.main /path/to/files --verbose
-
-# Parallel processing demo and help
-python parallel_demo.py --help
-python example_mood_extension.py  # Shows how to add new mood descriptors
-```
-
-### Performance Optimization
-```bash
-# For large collections, use parallel processing
-python parallel_demo.py /path/to/files --workers 16 --batch-size 32
-
-# Enable tensor optimizations
-python parallel_demo.py /path/to/files --enable-tensor --device cpu
-
-# Monitor memory usage and adjust batch size
-python parallel_demo.py /path/to/files --batch-size 8 --memory-limit 2048
-```
-
-## 📚 Next Steps
-
-### For New Users
-1. **Start with a small collection** (5-10 tracks) to understand the output
-2. **Read the comprehensive report** - Focus on the markdown file first
-3. **Try the recommended sequence** - Play tracks in suggested order
-4. **Explore the visualizations** - Understand your musical patterns
-5. **Experiment with clustering** - Create themed playlists
-
-### For Advanced Users
-1. **Use the Python API** - Integrate with your existing workflow
-2. **Customize analysis parameters** - Adjust clustering and export options
-3. **Run MCP server** - Enable AI assistant integration
-4. **Process large collections** - Use batch processing techniques
-5. **Contribute improvements** - The modular architecture welcomes enhancements
-
-### Integration Examples
-
-#### With AI Assistants
-```python
-# Example for Claude/ChatGPT integration
-from audio_analysis import AudioAnalyzer
-
-analyzer = AudioAnalyzer('/path/to/music')
-results = analyzer.analyze_directory()
-
-# Send results to AI for creative interpretation
-mood_analysis = results[['filename', 'primary_mood', 'mood_descriptors']]
-# "Please analyze these mood patterns and suggest creative directions..."
-```
-
-#### With Music Software
-```python
-# Export data for DAW integration
-analyzer.export_comprehensive_analysis(export_format='json')
-# Import JSON into your DAW or music management software
-```
-
-#### Batch Processing
-```bash
-# Process multiple directories (using wrapper script)
-for dir in /path/to/albums/*; do
-    python analyze_library.py "$dir" --export-format csv
-done
-
-# Or using direct module access
-for dir in /path/to/albums/*; do
-    python -m audio_analysis.cli.main "$dir" --export-format csv
-done
+╔══════════════════════════════════════════════════════════
+║  File                                    Sections  Duration
+╠══════════════════════════════════════════════════════════
+║  2020 cricketeering.aif                     11     6.3 min
+║  2021 12 20 chiminy biscuits.aif            12     5.5 min
+║  2021 melody partially resolute tetrax.      7     2.5 min
+║  2022 06 05 negative 60.aif                 13     4.2 min
+║  2022 09 17 caving in.aif                   22     9.5 min
+║  2022-09-25 while madeline sleeps.aif       26    10.7 min
+║  2022-12-14 a quatrax cosmos memory.aif     33    11.5 min
+║  2023 04 13 centers.aif                     23     9.6 min
+╠══════════════════════════════════════════════════════════
+║  All 8 pieces have similarity populated with top-3 peers
+╚══════════════════════════════════════════════════════════
 ```
 
 ---
 
-*Transform your music analysis from academic metrics to creative insights. Perfect for composers who want to understand their art through an intuitive, musical lens.* 🎶
+## Current Architecture
 
-**New in v2.1**: Comprehensive parallel processing capabilities with 6x+ performance improvements, hardware acceleration readiness for Tenstorrent processors, tensor-optimized data structures, and a refactored architecture that eliminates code duplication while maintaining full backward compatibility.
-
-**Previous v2.0**: Complete modular refactor with extensive inline documentation, enhanced CLI, robust error handling, professional-grade architecture, and convenient wrapper scripts for easy access.
-
-## 🌐 Hugging Face Deployment (NEW v2.2)
-
-The toolkit now includes a complete **Hugging Face Spaces** deployment for web-based audio analysis, making it accessible to users worldwide without any installation required.
-
-### 🚀 Web Interface Features
-
-**Easy Access**: Upload audio files directly through your web browser for instant analysis
-- **Multiple Analysis Types**: Comprehensive analysis, mood-only, or phase detection only
-- **Export Options**: Download results in Markdown, JSON, or CSV formats  
-- **Public Demo**: Share and demonstrate your audio analysis capabilities
-- **No Installation**: Works immediately in any web browser
-
-### 📁 Deployment Structure
 ```
-gradio/
-├── app.py                 # Complete Gradio web interface  
-├── requirements.txt       # HF-specific dependencies
-├── README.md             # Model card with proper YAML frontmatter
-└── CLAUDE.md             # Deployment-specific guidance
+audio_analysis/
+├── core/
+│   ├── tt_stft_kernel.py          # Streaming STFT with 3-tier dispatch
+│   ├── tt_stft_hw.py              # JAX PJRT hardware kernel
+│   ├── tt_stft_sim.py             # TT-Lang simulator kernel
+│   ├── trajectory_analysis.py     # Per-window tension trajectory
+│   ├── narrative_analysis.py      # Change-point detection + prose
+│   ├── narrative_types.py         # Shared dataclass definitions
+│   ├── feature_extraction.py      # 80+ librosa features
+│   ├── feature_extraction_base.py # Shared extraction core
+│   ├── phase_detection.py         # Musical phase classification
+│   ├── clustering.py              # K-means track grouping
+│   └── sequencing.py              # Listening sequence optimization
+├── analysis/
+│   ├── mood_analyzer.py           # 117 creative descriptors
+│   ├── character_analyzer.py      # 59 character tags
+│   └── cross_piece_similarity.py  # Library-wide similarity graph
+├── exporters/
+│   ├── narrative_exporter.py      # {stem}_narrative.json + .md
+│   ├── markdown_exporter.py       # Comprehensive reports
+│   ├── json_exporter.py
+│   └── csv_exporter.py
+└── api/
+    ├── mcp_server.py              # 7 tools: analyze, narrative, query
+    └── parallel_analyzer.py       # Full pipeline orchestrator
 ```
 
-### 🎯 Deployment Options
+---
 
-**Option 1: Hugging Face Spaces** (Recommended)
-1. Create new Space at [hf.co/new-space](https://hf.co/new-space)
-2. Choose "Gradio" SDK
-3. Upload contents of `gradio/` directory  
-4. Automatic deployment at `https://huggingface.co/spaces/yourusername/spacename`
+## What's Next
 
-**Option 2: Hugging Face Model Repository**
-- Upload complete Python package as model repository
-- Users install via `pip install git+https://huggingface.co/username/repo.git`
-- Include comprehensive documentation and examples
+The 3.2x STFT speedup is real but modest. The opportunity is larger:
 
-**Option 3: PyPI + HF Community**
-- Package for PyPI distribution (`pip install audio-analysis-toolkit`)
-- List as community resource on Hugging Face Hub
+**Multi-chip parallelism**: The P150X4 mesh has 4 Blackhole chips. The current JAX dispatch uses whatever chip JAX picks by default. Explicit device placement could run 4 chunks in parallel — potential 4x additional speedup on top of per-chip acceleration, pushing STFT for a 60-minute library well under 0.25 seconds.
 
-### 🎵 Web Analysis Capabilities
+**Trajectory on hardware**: `TrajectoryAnalyzer` currently runs on CPU. The per-window feature computations (roughness, ZCR, chroma spread) are embarrassingly parallel — the same matmul structure as STFT. A JIT-compiled trajectory kernel would make the full pipeline hardware-accelerated end to end.
 
-**Supported Audio**: WAV (recommended), AIFF, MP3 up to 100MB, 1s-30min duration
-**Analysis Results**: Same 17 mood descriptors, 9 character tags, and phase detection as desktop version
-**Export Formats**: Human-readable reports, structured JSON data, and spreadsheet-ready CSV files
-**Real-time Processing**: Immediate results with downloadable complete analysis
+**Real-time streaming**: The chunk-streaming architecture was designed for this. With hardware-accelerated STFT and fast trajectory, latency per chunk could drop below 10ms — enabling live analysis of audio as it's being performed or recorded.
 
-### 💡 Benefits for Users
+**Online narrative learning**: Right now the mood descriptors and section thresholds are hand-tuned. A piece could carry a "ground truth" section annotation (manually marked once) that updates the classifier's priors. Over a library of 100+ annotated pieces the thresholds would reflect the actual composer's perception, not generic calibration.
 
-- **Accessibility**: No Python knowledge or installation required
-- **Educational**: Interactive exploration of audio analysis concepts
-- **Professional**: API-quality outputs for integration workflows  
-- **Gateway**: Introduction to full desktop toolkit capabilities
-- **Shareable**: Public demos for collaboration and teaching
+**Similarity-driven sequencing**: The CrossPieceSimilarity graph currently provides neighbors as a reference. Feeding it into the `SequenceRecommender` — so that sequence transitions favor structurally complementary pieces rather than just spectrally similar ones — would produce more interesting playlists.
 
-The web interface maintains full compatibility with all desktop analysis features while providing an intuitive, browser-based experience that makes advanced audio analysis accessible to a broader audience.
+---
+
+## Setup
+
+```bash
+# Clone and activate environment
+git clone <repo>
+cd analyze_synths
+source bin/activate   # or .venv/bin/activate
+
+# Run full analysis on a directory
+python analyze_library.py /path/to/audio/
+
+# MCP server (for AI assistant integration)
+python mcp_server.py
+
+# Run the hardware STFT tests (requires JAX TT backend)
+PYTHONPATH=/home/ttuser/p300c-xla-test/lib/python3.12/site-packages:. \
+  /home/ttuser/p300c-xla-test/bin/python3 -m pytest tests/test_tt_stft_hw.py -v
+```
+
+**Dependencies**: librosa, scikit-learn, numpy, fastmcp, jax (with TT PJRT plugin for hardware path)
+
+---
+
+## Repository Layout
+
+```
+analyze_synths/
+├── audio_analysis/     # Python package (above)
+├── tests/              # pytest suite
+├── generated/          # Analysis output (gitignored)
+├── analyze_library.py  # CLI entry point
+├── mcp_server.py       # MCP server entry point
+└── requirements.txt
+```
+
+---
+
+*Built on Tenstorrent Blackhole hardware. STFT kernel via JAX PJRT. Narrative analysis via custom change-point detection and template prose. All descriptor thresholds calibrated against a personal synthesizer library.*
