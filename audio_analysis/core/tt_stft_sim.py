@@ -39,6 +39,7 @@ Loop ordering:
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from typing import TYPE_CHECKING
 
@@ -49,8 +50,8 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Ensure the TT-Lang python path is available
 # ---------------------------------------------------------------------------
-_TTL_PYTHON = "/home/ttuser/code/tt-lang/python"
-if _TTL_PYTHON not in sys.path:
+_TTL_PYTHON = os.environ.get("TT_LANG_PYTHON", "/home/ttuser/code/tt-lang/python")
+if _TTL_PYTHON and _TTL_PYTHON not in sys.path:
     sys.path.insert(0, _TTL_PYTHON)
 
 from sim import ttl, ttnn  # noqa: E402  (after sys.path patch)
@@ -132,7 +133,9 @@ def _stft_compute_mag(
                             # GEMM accumulate: f_blk @ c_blk is (TILE × TILE)
                             c_acc = c_acc + f_blk @ c_blk
                             s_acc = s_acc + f_blk @ s_blk
-                    # Fused magnitude: sqrt(cos² + sin²), stored to L1 ring slot
+                    # Note: no epsilon here (unlike NumPy path which uses +1e-8).
+                    # Near-zero bins produce exactly 0.0 vs ~1e-4 in NumPy.
+                    # Downstream log-mel computation should add its own epsilon.
                     mag_blk.store(
                         ttl.math.sqrt(
                             ttl.math.square(c_acc) + ttl.math.square(s_acc)

@@ -86,20 +86,21 @@ def test_simulator_kernel_parity_with_numpy():
     sim_chunk = fused_stft_sim(audio, kernel, chunk_start_time=0.0)
 
     # Compare mel spectrograms via mean energy per bin across frames
-    n_frames = min(ref.mel.shape[0], sim_chunk.mel.shape[0])
-    ref_mean = ref.mel[:n_frames].mean(axis=0)
-    sim_mean = sim_chunk.mel[:n_frames].mean(axis=0)
+    n = min(ref.mel.shape[0], sim_chunk.mel.shape[0])
+    ref_mean = ref.mel[:n].mean(axis=0)   # (n_mels,)
+    sim_mean = sim_chunk.mel[:n].mean(axis=0)
 
-    ref_peak = int(np.argmax(ref_mean))
-    sim_peak = int(np.argmax(sim_mean))
+    # Exclude near-zero bins (amplitude below 1% of max) to avoid epsilon sensitivity
+    max_val = ref_mean.max()
+    significant = ref_mean > 0.01 * max_val
 
-    tolerance_bins = max(1, int(0.05 * 128))  # 6 bins = 5% of 128
-    assert abs(sim_peak - ref_peak) <= tolerance_bins, (
-        f"Simulator mel peak bin {sim_peak} diverges from NumPy {ref_peak} "
-        f"by more than {tolerance_bins} bins.\n"
-        f"  ref top-5 bins: {np.argsort(ref_mean)[-5:][::-1].tolist()}\n"
-        f"  sim top-5 bins: {np.argsort(sim_mean)[-5:][::-1].tolist()}"
-    )
+    if significant.sum() > 0:
+        rel_errors = np.abs(sim_mean[significant] - ref_mean[significant]) / (ref_mean[significant] + 1e-9)
+        max_rel_error = rel_errors.max()
+        assert max_rel_error < 0.05, (
+            f"Simulator mel spectrum differs from NumPy by {max_rel_error:.3f} "
+            f"(max 5%) on significant bins"
+        )
 
 
 def test_simulator_kernel_empty_audio():
