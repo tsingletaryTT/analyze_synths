@@ -1687,7 +1687,10 @@ class CharacterTags:
             zero_crossing_rate_range=(0.04, 0.28),
             mfcc_characteristics='neutral',
             spectral_flatness_range=(0.05, 0.65),
-            confidence_threshold=0.55,
+            # Threshold set high: flatness criterion fails for whole-track averages of
+            # tonal synth recordings (library values 0.0001-0.01, not 0.05-0.65),
+            # making max achievable confidence ~0.81.  This prevents false positives.
+            confidence_threshold=0.90,
         ),
 
         'guitar': CharacterTag(
@@ -1699,7 +1702,8 @@ class CharacterTags:
             zero_crossing_rate_range=(0.04, 0.25),
             mfcc_characteristics='neutral',
             spectral_flatness_range=(0.05, 0.35),
-            confidence_threshold=0.55,
+            # Same issue as spoken_word — max ~0.81 without flatness passing.
+            confidence_threshold=0.90,
         ),
 
         'live_drums': CharacterTag(
@@ -1712,7 +1716,8 @@ class CharacterTags:
             mfcc_characteristics='neutral',
             spectral_flatness_range=(0.10, 0.70),
             spectral_flux_range=(50.0, float('inf')),
-            confidence_threshold=0.60,
+            # With flux+flatness both failing, max ~0.69; with flux passing, max ~0.83.
+            confidence_threshold=0.90,
         ),
 
         'laughter': CharacterTag(
@@ -1724,7 +1729,8 @@ class CharacterTags:
             zero_crossing_rate_range=(0.10, 0.40),
             mfcc_characteristics='neutral',
             spectral_flatness_range=(0.15, 0.70),
-            confidence_threshold=0.60,
+            # Same issue as spoken_word — max ~0.81 without flatness passing.
+            confidence_threshold=0.90,
         ),
 
         'wide_stereo': CharacterTag(

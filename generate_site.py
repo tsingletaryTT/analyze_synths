@@ -44,12 +44,11 @@ MOOD_COLORS = {
 }
 DEFAULT_MOOD_COLOR = ("#4a6070", "#607D8B")
 
-# Content-type character tags worth surfacing on cards
+# Content-type character tags surfaced on cards.
+# Only wide_stereo is shown because whole-track spectral averages can't reliably
+# discriminate speech/guitar/drums from synths in this library (flatness values
+# 0.0001-0.01 vs expected 0.05-0.65 for voice/acoustic content).
 CONTENT_CHAR_TAGS = {
-    "spoken_word": ("#EC96B8", "#F2BDD0"),
-    "guitar":      ("#E6B55E", "#F0CF8E"),
-    "live_drums":  ("#FF6B6B", "#FF9999"),
-    "laughter":    ("#EC96B8", "#F2BDD0"),
     "wide_stereo": ("#81E6D9", "#B2F0EC"),
 }
 

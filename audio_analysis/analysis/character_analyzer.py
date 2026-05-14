@@ -374,9 +374,14 @@ class CharacterAnalyzer:
             'spectral_centroid_mean': features.get('spectral_centroid_mean', 0),
             'spectral_bandwidth_mean': features.get('spectral_bandwidth_mean', 0),
             'spectral_rolloff_mean': features.get('spectral_rolloff_mean', 0),
-            'zero_crossing_rate_mean': features.get('zero_crossing_rate_mean', 0)
+            'zero_crossing_rate_mean': features.get('zero_crossing_rate_mean', 0),
         }
-        
+
+        # Pass new discriminative features when present
+        for key in ('spectral_flatness_mean', 'spectral_flux_mean', 'stereo_width'):
+            if key in features:
+                spectral_features[key] = features[key]
+
         # Add MFCC features
         for i in range(1, 14):
             mean_key = f'mfcc_{i}_mean'
