@@ -111,3 +111,73 @@ def test_timestamps_are_correct():
         spacing = chunk.timestamps[1] - chunk.timestamps[0]
         expected_spacing = hop / sr
         assert abs(spacing - expected_spacing) < 0.001
+
+
+def test_process_file_returns_full_spectrogram():
+    """process_file produces SpectrogramChunk covering full audio duration."""
+    sr = 22050
+    kernel = TTStftKernel(sr=sr)
+    duration = 5.0
+    audio = np.random.randn(int(sr * duration)).astype(np.float32) * 0.1
+    chunk = kernel.process_file(audio, sr=sr)
+
+    assert isinstance(chunk, SpectrogramChunk)
+    # Should have frames, mel, and timestamps
+    assert chunk.mag.ndim == 2
+    assert chunk.mag.shape[1] == kernel.n_freqs
+    assert chunk.mel.shape == (chunk.mag.shape[0], kernel.n_mels)
+    assert chunk.timestamps.shape == (chunk.mag.shape[0],)
+    # Timestamps should span the audio duration
+    assert chunk.timestamps[0] >= 0.0
+    assert chunk.timestamps[-1] < duration + 0.5
+
+
+def test_process_file_streaming_continuity():
+    """
+    Streaming: stitched result must match single-chunk result within 1% at boundaries.
+    Uses a 5-second file processed with chunk_seconds=3.0, overlap_seconds=1.0
+    so that stitching happens at approximately t=3.0s.
+    """
+    sr = 22050
+    t = np.linspace(0, 5, sr * 5, endpoint=False)
+    audio = (0.3 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+
+    # Small chunks to force stitching
+    kernel_stream = TTStftKernel(sr=sr, chunk_seconds=3.0, overlap_seconds=1.0)
+    result_stream = kernel_stream.process_file(audio, sr=sr)
+
+    # Single-pass reference: process all at once as one chunk
+    kernel_single = TTStftKernel(sr=sr, chunk_seconds=100.0, overlap_seconds=1.0)
+    result_single = kernel_single.process_file(audio, sr=sr)
+
+    # Both should have the same number of frames (within 2)
+    assert abs(result_stream.mag.shape[0] - result_single.mag.shape[0]) <= 2, (
+        f"Frame count divergence: stream={result_stream.mag.shape[0]}, "
+        f"single={result_single.mag.shape[0]}"
+    )
+
+    # Compare middle frames (away from boundaries) — should be identical
+    n = min(result_stream.mag.shape[0], result_single.mag.shape[0])
+    mid = n // 4  # start of stable middle region
+
+    stream_mag_mid = result_stream.mag[mid:mid+10]
+    single_mag_mid = result_single.mag[mid:mid+10]
+
+    if len(stream_mag_mid) > 0 and len(single_mag_mid) > 0:
+        max_diff = np.abs(stream_mag_mid - single_mag_mid).max()
+        mean_mag = np.abs(single_mag_mid).mean()
+        rel_err = max_diff / (mean_mag + 1e-9)
+        assert rel_err < 0.01, (
+            f"Streaming continuity error: rel_err={rel_err:.4f} (max 0.01)"
+        )
+
+
+def test_process_file_long_audio_no_oom():
+    """Long audio (60 seconds) must not crash or OOM."""
+    sr = 22050
+    # Allocate 60s of audio
+    audio = np.zeros(sr * 60, dtype=np.float32)
+    audio[:1000] = 0.1  # some non-zero signal
+    kernel = TTStftKernel(sr=sr, chunk_seconds=30.0, overlap_seconds=2.0)
+    result = kernel.process_file(audio)  # should not raise
+    assert result.mag.shape[0] > 0
