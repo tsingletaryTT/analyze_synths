@@ -139,15 +139,18 @@ def test_process_file_streaming_continuity():
     so that stitching happens at approximately t=3.0s.
     """
     sr = 22050
+    hop = 512
     t = np.linspace(0, 5, sr * 5, endpoint=False)
     audio = (0.3 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
 
     # Small chunks to force stitching
-    kernel_stream = TTStftKernel(sr=sr, chunk_seconds=3.0, overlap_seconds=1.0)
+    kernel_stream = TTStftKernel(sr=sr, chunk_seconds=3.0, overlap_seconds=1.0,
+                                  hop_length=hop)
     result_stream = kernel_stream.process_file(audio, sr=sr)
 
     # Single-pass reference: process all at once as one chunk
-    kernel_single = TTStftKernel(sr=sr, chunk_seconds=100.0, overlap_seconds=1.0)
+    kernel_single = TTStftKernel(sr=sr, chunk_seconds=100.0, overlap_seconds=1.0,
+                                  hop_length=hop)
     result_single = kernel_single.process_file(audio, sr=sr)
 
     # Both should have the same number of frames (within 2)
@@ -156,19 +159,39 @@ def test_process_file_streaming_continuity():
         f"single={result_single.mag.shape[0]}"
     )
 
-    # Compare middle frames (away from boundaries) — should be identical
-    n = min(result_stream.mag.shape[0], result_single.mag.shape[0])
-    mid = n // 4  # start of stable middle region
+    # Timestamps must be strictly monotonically increasing
+    assert np.all(np.diff(result_stream.timestamps) > 0), (
+        "Streaming timestamps are not monotonically increasing at stitch boundary"
+    )
 
-    stream_mag_mid = result_stream.mag[mid:mid+10]
-    single_mag_mid = result_single.mag[mid:mid+10]
+    # Find the stitch point: first frame at or after t=3.0s (chunk boundary)
+    stitch_idx = int(np.searchsorted(result_stream.timestamps, 3.0))
 
-    if len(stream_mag_mid) > 0 and len(single_mag_mid) > 0:
-        max_diff = np.abs(stream_mag_mid - single_mag_mid).max()
-        mean_mag = np.abs(single_mag_mid).mean()
-        rel_err = max_diff / (mean_mag + 1e-9)
+    # Compare frames just AFTER the stitch (5 frames on each side of boundary)
+    n_stream = result_stream.mag.shape[0]
+    n_single = result_single.mag.shape[0]
+
+    for offset in range(-2, 5):
+        si = stitch_idx + offset
+        # Find matching frame in single-pass by timestamp
+        if si < 0 or si >= n_stream:
+            continue
+        ts = result_stream.timestamps[si]
+        # Find closest timestamp in single-pass result
+        di = int(np.argmin(np.abs(result_single.timestamps - ts)))
+        if di >= n_single:
+            continue
+
+        # Relative error in magnitude at this frame
+        stream_frame = result_stream.mag[si]
+        single_frame = result_single.mag[di]
+        mean_mag = np.abs(single_frame).mean()
+        if mean_mag < 1e-9:
+            continue
+        rel_err = np.abs(stream_frame - single_frame).mean() / mean_mag
         assert rel_err < 0.01, (
-            f"Streaming continuity error: rel_err={rel_err:.4f} (max 0.01)"
+            f"Stitch boundary error at t={ts:.3f}s (frame {si}, offset {offset}): "
+            f"rel_err={rel_err:.4f} (max 0.01)"
         )
 
 
