@@ -134,26 +134,6 @@ def _build_chroma_filter(sr: int, n_fft: int) -> np.ndarray:
     return chroma
 
 
-def _build_dft_matrices(n_fft: int) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    DFT basis matrices for computing magnitude spectrum via matmul.
-
-    Returns:
-        dft_cos: (n_fft//2+1, n_fft) float32 — real (cosine) basis
-        dft_sin: (n_fft//2+1, n_fft) float32 — imaginary (sine) basis
-
-    Usage: mag = sqrt((frames @ dft_cos.T)**2 + (frames @ dft_sin.T)**2)
-    where frames shape is (..., n_fft).
-    """
-    n_freqs = n_fft // 2 + 1
-    n = np.arange(n_fft, dtype=np.float64)
-    k = np.arange(n_freqs, dtype=np.float64)[:, None]
-    angles = 2.0 * np.pi * k * n / n_fft
-    dft_cos = np.cos(angles).astype(np.float32)
-    dft_sin = np.sin(angles).astype(np.float32)
-    return dft_cos, dft_sin
-
-
 class JaxAudioFeatureExtractor:
     """
     JAX-based audio feature extractor targeting Tenstorrent Blackhole hardware.
@@ -184,25 +164,20 @@ class JaxAudioFeatureExtractor:
             _FILTER_CACHE[cache_key] = self._precompute_filters()
 
         filters = _FILTER_CACHE[cache_key]
-        self.dft_cos = filters['dft_cos']
-        self.dft_sin = filters['dft_sin']
         self.mel_filterbank = filters['mel_filterbank']
         self.dct_matrix = filters['dct_matrix']
         self.chroma_filter = filters['chroma_filter']
         self.freq_hz = filters['freq_hz']
-        self.hann_window = filters['hann_window']
         self.tonnetz_transform = _TONNETZ_TRANSFORM
 
     def _precompute_filters(self) -> Dict[str, np.ndarray]:
-        dft_cos, dft_sin = _build_dft_matrices(self.n_fft)
+        # TTStftKernel now owns the STFT computation, so DFT basis matrices
+        # (dft_cos, dft_sin) and the Hann window are no longer needed here.
         return {
-            'dft_cos': dft_cos,
-            'dft_sin': dft_sin,
             'mel_filterbank': _build_mel_filterbank(self.sr, self.n_fft, self.n_mels),
             'dct_matrix': _build_dct_matrix(self.n_mels, self.n_mfcc),
             'chroma_filter': _build_chroma_filter(self.sr, self.n_fft),
             'freq_hz': np.linspace(0, self.sr / 2, self.n_freqs, dtype=np.float32),
-            'hann_window': np.hanning(self.n_fft).astype(np.float32),
         }
 
     def _extract_tempo_cpu(
@@ -226,7 +201,7 @@ class JaxAudioFeatureExtractor:
                 tempo_val = float(tempo.item()) if hasattr(tempo, 'item') else float(tempo)
                 onset_density = float(len(beats) / (len(y) / self.sr)) if len(y) > 0 else 0.0
             except Exception as exc:
-                logger.debug("beat_track failed for %s: %s", file_paths[i], exc)
+                logger.debug("beat_track failed for file %d: %s", i, exc)
                 tempo_val = 0.0
                 onset_density = 0.0
             results.append({

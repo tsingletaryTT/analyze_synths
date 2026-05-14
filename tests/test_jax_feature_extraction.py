@@ -18,12 +18,15 @@ def test_jax_extractor_importable():
 
 
 def test_filter_shapes():
-    """Precomputed filter matrices have correct shapes."""
+    """Precomputed filter matrices have correct shapes.
+
+    dft_cos and dft_sin were removed in the TTStftKernel refactor — STFT is now
+    computed by TTStftKernel, so DFT basis matrices are no longer held on the
+    extractor instance.
+    """
     from audio_analysis.core.jax_feature_extraction import JaxAudioFeatureExtractor
     ex = JaxAudioFeatureExtractor(sr=22050, n_fft=2048, n_mels=128, n_mfcc=13)
     n_freqs = 2048 // 2 + 1  # 1025
-    assert ex.dft_cos.shape == (n_freqs, 2048), f"dft_cos shape wrong: {ex.dft_cos.shape}"
-    assert ex.dft_sin.shape == (n_freqs, 2048), f"dft_sin shape wrong: {ex.dft_sin.shape}"
     assert ex.mel_filterbank.shape == (n_freqs, 128), f"mel shape wrong: {ex.mel_filterbank.shape}"
     assert ex.dct_matrix.shape == (128, 13), f"dct shape wrong: {ex.dct_matrix.shape}"
     assert ex.chroma_filter.shape == (n_freqs, 12), f"chroma shape wrong: {ex.chroma_filter.shape}"
@@ -237,12 +240,14 @@ def test_parity_with_librosa_baseline():
                                           normalises each chroma frame to unit norm
     - tonnetz_*                         — tonnetz is derived from chroma, so the
                                           same normalisation difference propagates
-    - rms_*                             — librosa.feature.rms computes RMS on raw
-                                          (unwindowed) signal frames; the JAX path
-                                          applies a Hann window before computing RMS,
-                                          which attenuates signal energy by ~0.612x
-                                          (the RMS of a Hann window), giving ~38%
-                                          difference in rms_mean and ~65% in rms_std
+    - rms_*                             — librosa.feature.rms centers frames using a
+                                          reflection-padded signal; the JAX path uses
+                                          causal framing (frame_starts = arange * hop),
+                                          so boundary frames differ slightly. Both paths
+                                          use raw (unwindowed) frames for the RMS
+                                          calculation, but the frame alignment difference
+                                          is sufficient to produce inconsistent values
+                                          across implementations.
     """
     from audio_analysis.core.jax_feature_extraction import JaxAudioFeatureExtractor
     from audio_analysis.core.feature_extraction_base import FeatureExtractionCore
