@@ -89,7 +89,7 @@ def _stft_jit(frames_j, cos_j, sin_j, mel_j):
     """
     cos_proj = jnp.matmul(frames_j, cos_j)
     sin_proj = jnp.matmul(frames_j, sin_j)
-    mag_j    = jnp.sqrt(cos_proj * cos_proj + sin_proj * sin_proj)
+    mag_j    = jnp.sqrt(cos_proj * cos_proj + sin_proj * sin_proj + 1e-8)
     mel_o    = jnp.matmul(mag_j, mel_j)
     return mag_j, mel_o
 
