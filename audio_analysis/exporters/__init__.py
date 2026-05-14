@@ -14,9 +14,11 @@ Modules:
 from .csv_exporter import CSVExporter
 from .json_exporter import JSONExporter
 from .markdown_exporter import MarkdownExporter
+from .narrative_exporter import NarrativeExporter
 
 __all__ = [
     'CSVExporter',
     'JSONExporter',
-    'MarkdownExporter'
+    'MarkdownExporter',
+    'NarrativeExporter',
 ]
