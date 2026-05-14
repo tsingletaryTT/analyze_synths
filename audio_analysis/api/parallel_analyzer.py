@@ -149,6 +149,8 @@ class ParallelAudioAnalyzer:
         self.cluster_labels = None
         self.cluster_analysis = None
         self.sequence_recommendations = None
+        # Narrative analysis results: maps filename -> NarrativeResult
+        self.narrative_results: dict = {}
         
         # Initialize processing statistics
         self.processing_stats = ParallelProcessingStats()
@@ -221,7 +223,14 @@ class ParallelAudioAnalyzer:
         # Stage 4: Create DataFrame
         self.df = pd.DataFrame(self.audio_features)
         self.df = self.data_processor.clean_dataframe(self.df)
-        
+
+        # Stage 5: Narrative Pipeline
+        # Run temporal narrative analysis on each file, producing a NarrativeResult
+        # per track that includes section segmentation, mood arcs, and prose summaries.
+        # Each step is wrapped in a per-file try/except so a single failure cannot
+        # derail the rest of the analysis pipeline.
+        self._run_narrative_pipeline(audio_files, show_progress)
+
         # Record completion time
         self.processing_stats.end_time = datetime.now()
         
@@ -255,7 +264,98 @@ class ParallelAudioAnalyzer:
                 valid_files.append(file_path)
         
         return sorted(valid_files)
-    
+
+    def _run_narrative_pipeline(self, audio_files: List[Path],
+                                 show_progress: bool = True) -> None:
+        """
+        Run the temporal narrative analysis pipeline on every audio file.
+
+        For each file this method:
+          1. Loads raw audio via librosa (sr=22050, mono).
+          2. Builds a SpectrogramChunk using TTStftKernel when available, falling
+             back to a pure-librosa STFT/mel-spectrogram if the kernel is absent or
+             raises an exception.
+          3. Passes the chunk to TrajectoryAnalyzer to obtain per-frame trajectory
+             points (energy, brightness, roughness, etc.).
+          4. Passes the trajectory to NarrativeAnalyzer to segment sections, assign
+             mood arcs, and compose the prose narrative.
+          5. Stores the resulting NarrativeResult in ``self.narrative_results``.
+
+        After all files are processed, CrossPieceSimilarity.compute_library() is
+        called once to populate the ``similar_to`` field on every result.
+
+        Any exception during a single file's processing is caught and logged as a
+        WARNING so that one bad file cannot abort the whole pipeline.
+
+        Args:
+            audio_files: Ordered list of audio file paths (same as discovered list).
+            show_progress: Whether to print a per-stage progress message.
+        """
+        # Lazy imports — keep top-level module load fast
+        from audio_analysis.core.trajectory_analysis import TrajectoryAnalyzer
+        from audio_analysis.core.narrative_analysis import NarrativeAnalyzer
+        from audio_analysis.analysis.cross_piece_similarity import CrossPieceSimilarity
+
+        if show_progress:
+            print("Running narrative analysis pipeline...")
+
+        traj_az = TrajectoryAnalyzer(sr=22050)
+        narr_az = NarrativeAnalyzer()
+        # Reset narrative results in case analyze_directory is called more than once
+        self.narrative_results = {}
+
+        for file_path in audio_files:
+            filename = file_path.name
+            try:
+                import librosa
+                # Load at a consistent sample rate for all downstream analysis
+                audio, sr = librosa.load(str(file_path), sr=22050, mono=True)
+                duration = float(len(audio)) / sr
+
+                # Build SpectrogramChunk using librosa.
+                #
+                # We intentionally skip TTStftKernel here because the TT-Lang
+                # simulator (tt_stft_sim.py) can produce C-level segfaults that
+                # Python's try/except cannot intercept.  The narrative pipeline
+                # runs serially and a crash in one file would abort the entire
+                # batch.  TTStftKernel / the TT simulator are exercised separately
+                # via the dedicated hardware smoke tests; for this production path
+                # librosa is the reliable choice.
+                import numpy as np
+                from audio_analysis.core.tt_stft_kernel import SpectrogramChunk
+                stft = np.abs(librosa.stft(audio, n_fft=2048, hop_length=512)).T
+                mel = librosa.feature.melspectrogram(
+                    y=audio, sr=sr, n_fft=2048, hop_length=512, n_mels=128
+                ).T
+                # Timestamps: centre of each STFT frame in seconds
+                ts = np.arange(stft.shape[0], dtype=np.float32) * 512 / sr
+                chunk = SpectrogramChunk(
+                    mag=stft.astype(np.float32),
+                    mel=mel.astype(np.float32),
+                    timestamps=ts,
+                )
+
+                # Derive per-frame trajectory from spectrogram + waveform
+                trajectory = traj_az.analyze(chunk, audio)
+
+                # Segment into sections, assign moods, and compose narrative prose
+                result = narr_az.analyze(filename, duration, trajectory, audio, sr)
+                self.narrative_results[filename] = result
+
+            except Exception as exc:
+                logger.warning("Narrative analysis failed for %s: %s", filename, exc)
+
+        # Compute cross-piece similarity once we have all results — this populates
+        # the ``similar_to`` list on every NarrativeResult so MCP queries can answer
+        # "find pieces similar to this one" without re-running analysis.
+        if len(self.narrative_results) > 1:
+            CrossPieceSimilarity().compute_library(
+                list(self.narrative_results.values())
+            )
+
+        if show_progress:
+            print(f"Narrative analysis complete: {len(self.narrative_results)}/{len(audio_files)} files")
+
     def _perform_parallel_analysis(self):
         """
         Perform parallel phase detection and creative analysis.

@@ -5,13 +5,14 @@ This module provides MCP (Model Context Protocol) server integration for the
 audio analysis toolkit, allowing remote access to analysis capabilities
 through a standardized protocol interface.
 
-The MCP server exposes six main tools:
+The MCP server exposes seven main tools:
 1. analyze_audio_mood - Creative mood and character analysis
 2. analyze_audio_phases - Musical phase detection and analysis
 3. recommend_song_sequence - Intelligent track sequencing
 4. analyze_audio_clusters - Similarity-based track grouping
 5. comprehensive_audio_analysis - Complete analysis with export options
 6. get_supported_formats - Format and capability information
+7. query_narrative - Natural-language queries over pre-computed narrative JSON files
 
 All tools support base64-encoded audio file transmission and provide
 structured JSON responses optimized for programmatic access.
@@ -703,6 +704,132 @@ if MCP_AVAILABLE:
                 "DJ set preparation and flow optimization"
             ]
         }
+
+
+    @mcp.tool()
+    def query_narrative(directory: str, filename: str, query: str) -> dict:
+        """
+        Answer questions about a piece's temporal structure and emotional arc.
+
+        This tool reads the pre-computed narrative JSON file produced by
+        ParallelAudioAnalyzer / NarrativeExporter for a given audio file and
+        answers natural-language queries about it without re-running analysis.
+
+        Parameters
+        ----------
+        directory : str
+            Path to the directory that was analyzed.  The tool looks for a file
+            named ``<stem>_narrative.json`` in this directory.
+        filename : str
+            Audio filename (e.g. "my_piece.aif").  The stem is used to locate
+            the narrative JSON (e.g. "my_piece_narrative.json").
+        query : str
+            Natural-language question.  Supported query patterns:
+            - "what's happening at 3:20" / "around 2:00" → section at that time
+            - "describe the emotional arc" / "narrative" / "story" → full prose
+            - "when does the climax occur" / "peak" / "most intense" → climax time
+            - "find pieces similar to this one" / "similar" → similarity list
+
+        Returns
+        -------
+        dict with keys:
+            answer     : str  — natural-language response
+            sections   : list — relevant section data (may be empty)
+            similar_to : list — similar filenames (populated for similarity queries)
+            error      : str  — set when the narrative file cannot be found
+        """
+        import json
+        import re
+        from pathlib import Path
+
+        # Locate the pre-computed narrative JSON file
+        base = Path(filename).stem
+        json_path = Path(directory) / f"{base}_narrative.json"
+
+        if not json_path.exists():
+            return {
+                "error": (
+                    f"Narrative file not found: {json_path}.  "
+                    "Run ParallelAudioAnalyzer on the directory first, then export "
+                    "narratives with NarrativeExporter."
+                ),
+                "answer": "",
+                "sections": [],
+                "similar_to": [],
+            }
+
+        with open(json_path) as f:
+            data = json.load(f)
+
+        sections = data.get("sections", [])
+        narrative = data.get("narrative", "")
+        similar = data.get("similar_to", [])
+
+        query_lower = query.lower()
+
+        # ---- "what's happening at MM:SS" / "around MM:SS" ----
+        if any(kw in query_lower for kw in ("happening at", "at ", "around ")):
+            m = re.search(r"(\d+):(\d+)", query)
+            if m:
+                target_sec = int(m.group(1)) * 60 + int(m.group(2))
+                # Find the section whose time window contains the requested moment
+                matching = [
+                    s for s in sections
+                    if s["start"] <= target_sec < s["end"]
+                ]
+                if matching:
+                    sec = matching[0]
+                    time_str = query_lower.split("at")[-1].strip()
+                    answer = (
+                        f"At {time_str}: this is a {sec['section_type']} section — "
+                        f"{sec['dominant_mood']} mood, tension {sec['tension_score']:.2f}."
+                    )
+                    return {"answer": answer, "sections": matching, "similar_to": []}
+                # Time point is outside all section windows
+                total = max((s["end"] for s in sections), default=0)
+                return {
+                    "answer": (
+                        f"No section found at {target_sec}s "
+                        f"(piece duration: {total:.0f}s)."
+                    ),
+                    "sections": [],
+                    "similar_to": [],
+                }
+
+        # ---- emotional arc / full narrative description ----
+        if any(kw in query_lower for kw in ("arc", "narrative", "story", "describe")):
+            return {"answer": narrative, "sections": sections, "similar_to": []}
+
+        # ---- climax / peak intensity ----
+        if any(kw in query_lower for kw in ("climax", "peak", "highest", "most intense")):
+            climax_secs = [s for s in sections if s["section_type"] == "climax"]
+            if climax_secs:
+                sec = climax_secs[0]
+                mins = int(sec["start"]) // 60
+                secs = int(sec["start"]) % 60
+                answer = (
+                    f"The climax occurs at {mins}:{secs:02d} — "
+                    f"{sec['dominant_mood']}, tension {sec['tension_score']:.2f}."
+                )
+                return {"answer": answer, "sections": climax_secs, "similar_to": []}
+            return {
+                "answer": (
+                    "No climax section detected; the piece has a relatively uniform arc."
+                ),
+                "sections": [],
+                "similar_to": [],
+            }
+
+        # ---- cross-piece similarity ----
+        if any(kw in query_lower for kw in ("similar", "like this", "sounds like")):
+            if similar:
+                answer = f"Pieces similar to {filename}: {', '.join(similar)}."
+            else:
+                answer = "No similar pieces found in the library."
+            return {"answer": answer, "sections": [], "similar_to": similar}
+
+        # ---- fallback: return full narrative and all sections ----
+        return {"answer": narrative, "sections": sections, "similar_to": similar}
 
 
     # Helper methods for MCP tools
