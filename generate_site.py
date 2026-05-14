@@ -13,7 +13,13 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-JSON_PATH = Path("generated/full_library/audio_analysis_20260514_102446/reports/full_library_data.json")
+# Auto-discover the latest analysis run so regeneration doesn't need manual path updates.
+def _find_latest_json():
+    base = Path("generated/full_library")
+    candidates = sorted(base.glob("audio_analysis_*/reports/full_library_data.json"), reverse=True)
+    return candidates[0] if candidates else base / "full_library_data.json"
+
+JSON_PATH = _find_latest_json()
 OUT_PATH  = Path("docs/index.html")
 
 # --- Mood color palette (matches existing CSS vars) ---
@@ -37,6 +43,15 @@ MOOD_COLORS = {
     "droning":      ("#607D8B", "#90AAB8"),
 }
 DEFAULT_MOOD_COLOR = ("#4a6070", "#607D8B")
+
+# Content-type character tags worth surfacing on cards
+CONTENT_CHAR_TAGS = {
+    "spoken_word": ("#EC96B8", "#F2BDD0"),
+    "guitar":      ("#E6B55E", "#F0CF8E"),
+    "live_drums":  ("#FF6B6B", "#FF9999"),
+    "laughter":    ("#EC96B8", "#F2BDD0"),
+    "wide_stereo": ("#81E6D9", "#B2F0EC"),
+}
 
 TENSION_COLORS = {
     (0.0, 0.15): "#607D8B",
@@ -127,6 +142,14 @@ def render_track_card(track, phases_for_file, similar_files):
     slug = slugify(name)
     dur = fmt_duration(float(track.get("duration", 0)))
 
+    # Parse content-type character tags from the track-level field
+    char_tags_raw = track.get("character_tags", "") or ""
+    if isinstance(char_tags_raw, list):
+        char_tags_set = set(char_tags_raw)
+    else:
+        char_tags_set = {t.strip() for t in char_tags_raw.split(",") if t.strip()}
+    present_content_tags = [t for t in CONTENT_CHAR_TAGS if t in char_tags_set]
+
     # Mood tags from phases
     mood_counts = Counter()
     energy_vals = []
@@ -167,8 +190,12 @@ def render_track_card(track, phases_for_file, similar_files):
         tension = 0.2
     tcol = tension_color(tension)
 
-    # Tags
+    # Tags — content character tags first (spoken_word, guitar, etc.), then top moods
     tags_html = []
+    for ct in present_content_tags:
+        bc, fc = CONTENT_CHAR_TAGS[ct]
+        label = ct.replace("_", " ")
+        tags_html.append(f'<span class="tag" style="border-color:{bc};color:{fc}">{label}</span>')
     for mood, cnt in mood_counts.most_common(5):
         bc, fc = MOOD_COLORS.get(mood, DEFAULT_MOOD_COLOR)
         label = f"{mood} ×{cnt}" if cnt > 1 else mood
