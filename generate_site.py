@@ -214,14 +214,36 @@ def render_track_card(track, phases_for_file, similar_files):
 
     num_sections = len(phases_for_file)
 
+    # BPM + key from track features
+    bpm = track.get("tempo")
+    track_key = track.get("key", "")
+    bpm_str = f"{int(round(float(bpm)))} BPM" if bpm else ""
+    key_str = track_key or ""
+    meta_parts = [dur]
+    if key_str:
+        meta_parts.append(key_str)
+    if bpm_str:
+        meta_parts.append(bpm_str)
+    meta_line = " · ".join(meta_parts)
+
+    # Structural markers
+    struct_badges = []
+    if track.get("has_climax"):
+        struct_badges.append('<span class="struct-badge climax">↑ climax</span>')
+    if track.get("has_breakdown"):
+        struct_badges.append('<span class="struct-badge breakdown">↓ breakdown</span>')
+    if track.get("has_build_up"):
+        struct_badges.append('<span class="struct-badge buildup">→ build-up</span>')
+    struct_html = "".join(struct_badges)
+
     return f"""    <div class="track-card" id="{slug}">
       <div class="track-left">
         <div class="track-header">
           <span class="track-title">{name}</span>
-          <span class="track-meta">{dur}</span>
+          <span class="track-meta">{meta_line}</span>
         </div>
         <p class="track-narrative">{narrative}</p>
-        <div class="track-tags">{''.join(tags_html)}</div>
+        <div class="track-tags">{''.join(tags_html)}{struct_html}</div>
         <div class="track-similar">
           <span class="similar-label">from same cluster &rarr;</span>
           {''.join(similar_html) or '<span class="similar-chip">unique</span>'}
@@ -295,6 +317,34 @@ def generate(data):
         dur_str = f"{total_dur_h:.1f}h"
     else:
         dur_str = f"{int(total_dur_s/60)}&thinsp;min"
+
+    # Collection analytics for the stats section
+    mood_dist = summary.get("mood_distribution", {})
+    key_dist = summary.get("key_distribution", {})
+    # Compute top moods from tracks if the summary gives aggregated dict
+    mood_counter = Counter()
+    key_counter = Counter()
+    bpm_vals = []
+    for t in tracks:
+        pm = t.get("primary_mood") or ""
+        if pm:
+            mood_counter[pm] += 1
+        k = t.get("key") or ""
+        if k:
+            key_counter[k] += 1
+        bpm = t.get("tempo")
+        if bpm:
+            bpm_vals.append(float(bpm))
+    top_moods_html = "".join(
+        f'<span class="stat-pill" style="border-color:{MOOD_COLORS.get(m, DEFAULT_MOOD_COLOR)[0]};color:{MOOD_COLORS.get(m, DEFAULT_MOOD_COLOR)[1]}">{m} <em>{cnt}</em></span>'
+        for m, cnt in mood_counter.most_common(6)
+    )
+    top_keys_html = "".join(
+        f'<span class="stat-pill">{k} <em>{cnt}</em></span>'
+        for k, cnt in key_counter.most_common(6)
+    )
+    avg_bpm = f"{sum(bpm_vals)/len(bpm_vals):.0f}" if bpm_vals else "—"
+    bpm_range = f"{min(bpm_vals):.0f}–{max(bpm_vals):.0f}" if bpm_vals else "—"
 
     # Build HTML
     html = f"""<!DOCTYPE html>
@@ -383,6 +433,15 @@ def generate(data):
   .cmp-card:not(.hl) .cmp-value {{ color: var(--text-dim); }}
   .cmp-sub {{ font-size: 0.78rem; color: var(--text-mute); }}
 
+  #stats {{ padding: 4rem 0; border-bottom: 1px solid var(--border); }}
+  .stats-rows {{ display: flex; flex-direction: column; gap: 1.2rem; margin-top: 1.5rem; }}
+  .stats-row {{ display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }}
+  .stats-label {{ font-family: var(--mono); font-size: 0.72rem; color: var(--text-mute); text-transform: uppercase; letter-spacing: 0.06em; min-width: 8rem; }}
+  .stats-value {{ font-family: var(--mono); font-size: 1rem; color: var(--teal); font-weight: 600; }}
+  .stats-range {{ font-family: var(--mono); font-size: 0.78rem; color: var(--text-dim); }}
+  .stats-pills {{ display: flex; flex-wrap: wrap; gap: 0.35rem; }}
+  .stat-pill {{ font-size: 0.68rem; padding: 0.2em 0.6em; border-radius: 3px; border: 1px solid var(--border); color: var(--text-dim); background: transparent; }}
+  .stat-pill em {{ font-style: normal; opacity: 0.65; }}
   .library-grid {{ display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }}
   .track-card {{ background: var(--bg-card); padding: 1.5rem 1.8rem; display: grid; grid-template-columns: 1fr auto; gap: 1rem 2rem; align-items: start; transition: background 0.15s; }}
   .track-card:target {{ background: var(--bg-raised); outline: 1px solid var(--teal-dim); }}
@@ -392,6 +451,10 @@ def generate(data):
   .track-narrative {{ font-size: 0.83rem; color: var(--text-dim); line-height: 1.6; margin-bottom: 0.9rem; }}
   .track-tags {{ display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.75rem; }}
   .tag {{ font-size: 0.68rem; padding: 0.2em 0.55em; border-radius: 3px; font-weight: 500; border: 1px solid; background: transparent; }}
+  .struct-badge {{ font-size: 0.65rem; padding: 0.15em 0.45em; border-radius: 3px; background: transparent; border: 1px solid; opacity: 0.7; }}
+  .struct-badge.climax {{ border-color: #F4C471; color: #F4C471; }}
+  .struct-badge.breakdown {{ border-color: #607D8B; color: #607D8B; }}
+  .struct-badge.buildup {{ border-color: #27AE60; color: #27AE60; }}
   .track-similar {{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; font-size: 0.72rem; }}
   .similar-label {{ color: var(--text-mute); }}
   .similar-chip {{ background: var(--bg-raised); border: 1px solid var(--border); border-radius: 3px; padding: 0.15em 0.5em; color: var(--text-dim); font-size: 0.68rem; display: inline-block; }}
@@ -433,6 +496,7 @@ def generate(data):
   <ul>
     <li><a href="#story">story</a></li>
     <li><a href="#benchmarks">benchmarks</a></li>
+    <li><a href="#stats">stats</a></li>
     <li><a href="#library">library</a></li>
     <li><a href="#next">next</a></li>
     <li><a href="https://github.com/tsingletaryTT/analyze_synths">github</a></li>
@@ -569,6 +633,29 @@ def generate(data):
       <div class="cmp-label">Speedup</div>
       <div class="cmp-value" style="color:var(--yellow)">3.2x</div>
       <div class="cmp-sub">hardware vs NumPy reference</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- collection stats -->
+<section id="stats">
+<div class="container">
+  <h2>Collection at a glance</h2>
+  <p class="section-sub">Tempo, mood, and key across {n_tracks} tracks</p>
+  <div class="stats-rows">
+    <div class="stats-row">
+      <span class="stats-label">Avg tempo</span>
+      <span class="stats-value mono">{avg_bpm} BPM</span>
+      <span class="stats-range mono">range {bpm_range}</span>
+    </div>
+    <div class="stats-row">
+      <span class="stats-label">Top moods</span>
+      <span class="stats-pills">{top_moods_html}</span>
+    </div>
+    <div class="stats-row">
+      <span class="stats-label">Key distribution</span>
+      <span class="stats-pills">{top_keys_html}</span>
     </div>
   </div>
 </div>
