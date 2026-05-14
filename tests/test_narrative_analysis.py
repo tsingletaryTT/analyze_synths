@@ -72,7 +72,22 @@ def test_minimum_section_duration_enforced():
 
 
 def test_maximum_section_duration_enforced():
-    traj = _make_trajectory(90, tension=0.4)  # 180s flat
+    # Build a 180-second trajectory with a slow-ramp tension variation so that
+    # _split_long has genuine gradient peaks to split on.  A completely flat
+    # trajectory would correctly *not* be split (no change point exists), so
+    # we need real variation to exercise the max-duration ceiling.
+    n = 90  # 180 seconds at 2s/point
+    traj = [
+        TrajectoryPoint(
+            time=float(i * 2),
+            energy=0.05 + 0.10 * abs(np.sin(i * np.pi / 30)),
+            brightness=1800.0 + 400.0 * np.sin(i * np.pi / 30),
+            roughness=0.07,
+            zcr=0.10, chroma_peak="C", chroma_spread=0.5,
+            tension_score=0.2 + 0.6 * abs(np.sin(i * np.pi / 30)),
+        )
+        for i in range(n)
+    ]
     az = NarrativeAnalyzer()
     sections = az.detect_sections(traj, duration=180.0)
     for sec in sections:
@@ -152,3 +167,15 @@ def test_motion_abrupt_or_swell():
               for t in [4.0, 6.0]]
     motion = az._compute_motion(before, after)
     assert motion.type in ("abrupt", "swell"), f"got {motion.type}"
+
+
+def test_split_long_flat_tension_no_micro_sections():
+    """Flat trajectory split should not produce sections < MIN_SECTION_SEC."""
+    from audio_analysis.core.narrative_analysis import MIN_SECTION_SEC
+    traj = _make_trajectory(90, tension=0.5)  # 180s, completely flat
+    az = NarrativeAnalyzer()
+    sections = az.detect_sections(traj, duration=180.0)
+    for sec in sections:
+        assert (sec.end - sec.start) >= MIN_SECTION_SEC - 1.0, (
+            f"Micro-section: {sec.start:.1f}–{sec.end:.1f}"
+        )

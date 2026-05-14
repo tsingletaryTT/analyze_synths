@@ -27,13 +27,12 @@ Usage:
     sections = az.detect_sections(trajectory, duration)
     az._classify_sections(sections, duration)
 """
-import math
 from typing import List
 
 import numpy as np
 
 from audio_analysis.core.narrative_types import (
-    NarrativeResult, Section, SectionMotion, TrajectoryPoint,
+    Section, SectionMotion, TrajectoryPoint,
 )
 
 # ------------------------------------------------------------------
@@ -550,6 +549,13 @@ class NarrativeAnalyzer:
             tensions = np.array([tp.tension_score for tp in sec_traj], dtype=np.float32)
             # np.gradient gives local rate of change; pick maximum absolute gradient
             grad = np.abs(np.gradient(tensions))
+            # Guard: if the entire segment is flat (all gradients are zero),
+            # there is no meaningful change point to split on.  Splitting anyway
+            # would cause np.argmax to return index 0, producing a 2-second
+            # micro-section that violates MIN_SECTION_SEC.
+            if grad.max() == 0.0:
+                result.append(end)
+                continue
             split_idx = int(np.argmax(grad))
             split_time = sec_traj[split_idx].time
             # Recurse so that the two sub-segments are also checked
