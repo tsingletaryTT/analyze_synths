@@ -1,0 +1,22 @@
+# source this file: "source bin/activate_tt"
+# Activates the p300c-xla-test Python 3.12 environment which has:
+#   - JAX 0.7.1 with Tenstorrent Blackhole PJRT plugin
+#   - librosa, scikit-learn, pandas, fastmcp, pydub and all analysis deps
+#   - audio_analysis package from this project (via .pth file)
+
+source /home/ttuser/p300c-xla-test/bin/activate
+
+# Override the prompt to show project context
+VIRTUAL_ENV_PROMPT='analyze_synths-tt'
+export VIRTUAL_ENV_PROMPT
+if [ -z "${VIRTUAL_ENV_DISABLE_PROMPT:-}" ] ; then
+    PS1="(analyze_synths-tt) ${_OLD_VIRTUAL_PS1:-$PS1}"
+    export PS1
+fi
+
+# Ensure PJRT plugin is resolvable (tt_stft_hw.py also sets this at import time,
+# but setting it here makes the env self-contained)
+export PJRT_PLUGIN_LIBRARY_PATH=/home/ttuser/tt-xla/python_package/pjrt_plugin_tt/pjrt_plugin_tt.so
+
+# Change to project directory for convenience
+export ANALYZE_SYNTHS_ROOT=/home/ttuser/code/analyze_synths
