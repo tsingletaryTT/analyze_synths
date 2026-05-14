@@ -270,11 +270,14 @@ class ParallelAudioAnalyzer:
         """
         Run the temporal narrative analysis pipeline on every audio file.
 
+        Builds SpectrogramChunk using librosa's STFT and mel filterbank directly.
+        TTStftKernel is intentionally skipped in this path due to segfault risk
+        from the TT-Lang simulator — see inline comment at the construction site.
+
         For each file this method:
           1. Loads raw audio via librosa (sr=22050, mono).
-          2. Builds a SpectrogramChunk using TTStftKernel when available, falling
-             back to a pure-librosa STFT/mel-spectrogram if the kernel is absent or
-             raises an exception.
+          2. Builds a SpectrogramChunk directly from librosa STFT + mel filterbank
+             (TTStftKernel is deliberately not used here; see inline comment below).
           3. Passes the chunk to TrajectoryAnalyzer to obtain per-frame trajectory
              points (energy, brightness, roughness, etc.).
           4. Passes the trajectory to NarrativeAnalyzer to segment sections, assign
@@ -291,7 +294,11 @@ class ParallelAudioAnalyzer:
             audio_files: Ordered list of audio file paths (same as discovered list).
             show_progress: Whether to print a per-stage progress message.
         """
-        # Lazy imports — keep top-level module load fast
+        # Lazy imports — keep top-level module load fast.
+        # librosa and numpy are also imported here (not inside the loop) so that
+        # module load overhead is paid once rather than once per file.
+        import librosa
+        import numpy as np
         from audio_analysis.core.trajectory_analysis import TrajectoryAnalyzer
         from audio_analysis.core.narrative_analysis import NarrativeAnalyzer
         from audio_analysis.analysis.cross_piece_similarity import CrossPieceSimilarity
@@ -307,8 +314,7 @@ class ParallelAudioAnalyzer:
         for file_path in audio_files:
             filename = file_path.name
             try:
-                import librosa
-                # Load at a consistent sample rate for all downstream analysis
+                # NOTE: re-loads audio already loaded in Stage 3; a future optimization could cache waveforms
                 audio, sr = librosa.load(str(file_path), sr=22050, mono=True)
                 duration = float(len(audio)) / sr
 
@@ -321,7 +327,6 @@ class ParallelAudioAnalyzer:
                 # batch.  TTStftKernel / the TT simulator are exercised separately
                 # via the dedicated hardware smoke tests; for this production path
                 # librosa is the reliable choice.
-                import numpy as np
                 from audio_analysis.core.tt_stft_kernel import SpectrogramChunk
                 stft = np.abs(librosa.stft(audio, n_fft=2048, hop_length=512)).T
                 mel = librosa.feature.melspectrogram(

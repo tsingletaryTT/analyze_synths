@@ -32,6 +32,11 @@ def test_parallel_analyzer_produces_narrative_results():
     narrative_results = analyzer.narrative_results
     assert narrative_results, "No narrative results produced"
 
+    expected_count = len(list(SAMPLES_DIR.glob("*.aif")))
+    assert len(narrative_results) == expected_count, (
+        f"Expected {expected_count} narrative results, got {len(narrative_results)}"
+    )
+
     for filename, result in narrative_results.items():
         assert len(result.sections) >= 1, (
             f"{filename}: expected at least 1 section, got {len(result.sections)}"
@@ -57,4 +62,9 @@ def test_narrative_exports_created(tmp_path):
     json_files = list(tmp_path.glob("*_narrative.json"))
     assert len(json_files) == len(analyzer.narrative_results), (
         f"Expected {len(analyzer.narrative_results)} JSON files, got {len(json_files)}"
+    )
+
+    md_files = list(tmp_path.glob("*_narrative.md"))
+    assert len(md_files) == len(analyzer.narrative_results), (
+        f"Expected {len(analyzer.narrative_results)} MD files, got {len(md_files)}"
     )

@@ -779,12 +779,13 @@ if MCP_AVAILABLE:
                 ]
                 if matching:
                     sec = matching[0]
-                    time_str = query_lower.split("at")[-1].strip()
+                    # Use the matched MM:SS token from the query rather than a
+                    # fragile string-split, so "around 2:00" displays "2:00" correctly.
                     answer = (
-                        f"At {time_str}: this is a {sec['section_type']} section — "
+                        f"At {m.group(0)}: this is a {sec['section_type']} section — "
                         f"{sec['dominant_mood']} mood, tension {sec['tension_score']:.2f}."
                     )
-                    return {"answer": answer, "sections": matching, "similar_to": []}
+                    return {"answer": answer, "sections": matching, "similar_to": [], "error": ""}
                 # Time point is outside all section windows
                 total = max((s["end"] for s in sections), default=0)
                 return {
@@ -794,14 +795,16 @@ if MCP_AVAILABLE:
                     ),
                     "sections": [],
                     "similar_to": [],
+                    "error": "",
                 }
+            # Regex didn't match a MM:SS timestamp — fall through to the branches below
 
         # ---- emotional arc / full narrative description ----
-        if any(kw in query_lower for kw in ("arc", "narrative", "story", "describe")):
-            return {"answer": narrative, "sections": sections, "similar_to": []}
+        elif any(kw in query_lower for kw in ("arc", "narrative", "story", "describe")):
+            return {"answer": narrative, "sections": sections, "similar_to": [], "error": ""}
 
         # ---- climax / peak intensity ----
-        if any(kw in query_lower for kw in ("climax", "peak", "highest", "most intense")):
+        elif any(kw in query_lower for kw in ("climax", "peak", "highest", "most intense")):
             climax_secs = [s for s in sections if s["section_type"] == "climax"]
             if climax_secs:
                 sec = climax_secs[0]
@@ -811,25 +814,26 @@ if MCP_AVAILABLE:
                     f"The climax occurs at {mins}:{secs:02d} — "
                     f"{sec['dominant_mood']}, tension {sec['tension_score']:.2f}."
                 )
-                return {"answer": answer, "sections": climax_secs, "similar_to": []}
+                return {"answer": answer, "sections": climax_secs, "similar_to": [], "error": ""}
             return {
                 "answer": (
                     "No climax section detected; the piece has a relatively uniform arc."
                 ),
                 "sections": [],
                 "similar_to": [],
+                "error": "",
             }
 
         # ---- cross-piece similarity ----
-        if any(kw in query_lower for kw in ("similar", "like this", "sounds like")):
+        elif any(kw in query_lower for kw in ("similar", "like this", "sounds like")):
             if similar:
                 answer = f"Pieces similar to {filename}: {', '.join(similar)}."
             else:
                 answer = "No similar pieces found in the library."
-            return {"answer": answer, "sections": [], "similar_to": similar}
+            return {"answer": answer, "sections": [], "similar_to": similar, "error": ""}
 
         # ---- fallback: return full narrative and all sections ----
-        return {"answer": narrative, "sections": sections, "similar_to": similar}
+        return {"answer": narrative, "sections": sections, "similar_to": similar, "error": ""}
 
 
     # Helper methods for MCP tools
