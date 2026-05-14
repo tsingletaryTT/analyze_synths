@@ -78,13 +78,18 @@ class TTStftKernel:
         self._cos_basis, self._sin_basis, self._mel_filter, self._hann = \
             self._build_stft_constants(sr, n_fft, n_mels)
 
-        # Detect TT-Lang simulator availability once at init.
-        # Cached as a boolean so the import probe is not repeated per chunk.
-        self._try_ttl = self._detect_ttl()
-        if self._try_ttl:
-            log.info("TT-Lang simulator available — using fused STFT kernel")
+        # Probe backends once at init. Priority: hardware > simulator > NumPy.
+        # _try_hw  is checked first; if hardware is available, the simulator is
+        # not loaded at all (avoids greenlet overhead and segfault risk).
+        self._try_hw  = self._detect_hw()
+        self._try_ttl = False if self._try_hw else self._detect_ttl()
+
+        if self._try_hw:
+            log.info("TT hardware available (JAX PJRT) — using hardware STFT dispatch")
+        elif self._try_ttl:
+            log.info("TT-Lang simulator available — using simulated STFT dispatch")
         else:
-            log.info("TT-Lang unavailable — using NumPy STFT fallback")
+            log.info("No TT backend detected — using NumPy STFT fallback")
 
     @staticmethod
     def _build_stft_constants(sr: int, n_fft: int, n_mels: int):
@@ -136,6 +141,21 @@ class TTStftKernel:
             from audio_analysis.core import tt_stft_sim  # noqa: F401
             return True
         except ImportError:
+            return False
+
+    @staticmethod
+    def _detect_hw() -> bool:
+        """Return True if JAX PJRT with TT hardware backend is available.
+
+        Called once at init; result is cached in ``self._try_hw``.  If True,
+        ``self._try_ttl`` is forced False so the TT-Lang greenlet simulator is
+        never loaded — the hardware path uses JAX (no greenlets) and is safe
+        to run in the narrative pipeline and other threaded contexts.
+        """
+        try:
+            from audio_analysis.core.tt_stft_hw import is_available
+            return is_available()
+        except Exception:
             return False
 
     def _process_chunk_numpy(
@@ -213,12 +233,14 @@ class TTStftKernel:
         Process one audio chunk.
 
         Dispatch order:
-          1. TT-Lang fused STFT (if simulator or hardware available)
-          2. NumPy DFT-matmul fallback
+          1. JAX PJRT hardware STFT (if TT device detected)
+          2. TT-Lang simulator STFT (if TT-Lang sim available, no HW)
+          3. NumPy DFT-matmul fallback
 
-        If the TT-Lang dispatch raises any exception on the first attempt,
-        ``self._try_ttl`` is flipped to False so subsequent chunks skip the
-        import overhead and go straight to NumPy.
+        If a dispatch path raises any exception on the first attempt, its flag
+        (``self._try_hw`` or ``self._try_ttl``) is flipped to False so
+        subsequent chunks skip the import overhead and fall through to the
+        next available path.
 
         Parameters
         ----------
@@ -229,6 +251,16 @@ class TTStftKernel:
         -------
         SpectrogramChunk
         """
+        if self._try_hw:
+            try:
+                from audio_analysis.core.tt_stft_hw import fused_stft_hw
+                return fused_stft_hw(audio_chunk, self, chunk_start_time)
+            except Exception as e:
+                log.warning("TT hardware dispatch failed (%s); falling back", e)
+                # Disable hardware for all subsequent chunks; the next tier
+                # (TT-Lang sim or NumPy) will be tried on the next call.
+                self._try_hw = False
+
         if self._try_ttl:
             try:
                 from audio_analysis.core.tt_stft_sim import fused_stft_sim

@@ -270,14 +270,15 @@ class ParallelAudioAnalyzer:
         """
         Run the temporal narrative analysis pipeline on every audio file.
 
-        Builds SpectrogramChunk using librosa's STFT and mel filterbank directly.
-        TTStftKernel is intentionally skipped in this path due to segfault risk
-        from the TT-Lang simulator — see inline comment at the construction site.
+        Uses TTStftKernel to build SpectrogramChunks, which automatically selects
+        the best available backend (JAX PJRT hardware > TT-Lang simulator > NumPy).
+        If TTStftKernel itself raises an unexpected error, the method falls back to
+        building SpectrogramChunk directly from librosa STFT + mel filterbank.
 
         For each file this method:
           1. Loads raw audio via librosa (sr=22050, mono).
-          2. Builds a SpectrogramChunk directly from librosa STFT + mel filterbank
-             (TTStftKernel is deliberately not used here; see inline comment below).
+          2. Builds a SpectrogramChunk via TTStftKernel.process_file(), which
+             dispatches to the best available backend (HW > sim > NumPy).
           3. Passes the chunk to TrajectoryAnalyzer to obtain per-frame trajectory
              points (energy, brightness, roughness, etc.).
           4. Passes the trajectory to NarrativeAnalyzer to segment sections, assign
@@ -318,27 +319,29 @@ class ParallelAudioAnalyzer:
                 audio, sr = librosa.load(str(file_path), sr=22050, mono=True)
                 duration = float(len(audio)) / sr
 
-                # Build SpectrogramChunk using librosa.
-                #
-                # We intentionally skip TTStftKernel here because the TT-Lang
-                # simulator (tt_stft_sim.py) can produce C-level segfaults that
-                # Python's try/except cannot intercept.  The narrative pipeline
-                # runs serially and a crash in one file would abort the entire
-                # batch.  TTStftKernel / the TT simulator are exercised separately
-                # via the dedicated hardware smoke tests; for this production path
-                # librosa is the reliable choice.
-                from audio_analysis.core.tt_stft_kernel import SpectrogramChunk
-                stft = np.abs(librosa.stft(audio, n_fft=2048, hop_length=512)).T
-                mel = librosa.feature.melspectrogram(
-                    y=audio, sr=sr, n_fft=2048, hop_length=512, n_mels=128
-                ).T
-                # Timestamps: centre of each STFT frame in seconds
-                ts = np.arange(stft.shape[0], dtype=np.float32) * 512 / sr
-                chunk = SpectrogramChunk(
-                    mag=stft.astype(np.float32),
-                    mel=mel.astype(np.float32),
-                    timestamps=ts,
-                )
+                # Build SpectrogramChunk via TTStftKernel, which picks the best
+                # available backend automatically (JAX PJRT hardware if TT devices
+                # are present, TT-Lang simulator if available, NumPy otherwise).
+                # The hardware path uses JAX — no greenlets — so it is safe to use
+                # here in the serially-executed narrative pipeline.  If TTStftKernel
+                # itself raises unexpectedly, fall back to librosa-direct construction.
+                try:
+                    from audio_analysis.core.tt_stft_kernel import TTStftKernel
+                    _kernel = TTStftKernel(sr=sr)
+                    chunk = _kernel.process_file(audio, sr)
+                except Exception:
+                    stft = np.abs(librosa.stft(audio, n_fft=2048, hop_length=512)).T
+                    mel = librosa.feature.melspectrogram(
+                        y=audio, sr=sr, n_fft=2048, hop_length=512, n_mels=128
+                    ).T
+                    # Timestamps: centre of each STFT frame in seconds
+                    ts = np.arange(stft.shape[0], dtype=np.float32) * 512 / sr
+                    from audio_analysis.core.tt_stft_kernel import SpectrogramChunk
+                    chunk = SpectrogramChunk(
+                        mag=stft.astype(np.float32),
+                        mel=mel.astype(np.float32),
+                        timestamps=ts,
+                    )
 
                 # Derive per-frame trajectory from spectrogram + waveform
                 trajectory = traj_az.analyze(chunk, audio)
