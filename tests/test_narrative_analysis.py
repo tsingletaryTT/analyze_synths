@@ -179,3 +179,53 @@ def test_split_long_flat_tension_no_micro_sections():
         assert (sec.end - sec.start) >= MIN_SECTION_SEC - 1.0, (
             f"Micro-section: {sec.start:.1f}–{sec.end:.1f}"
         )
+
+
+def test_narrative_prose_non_empty():
+    """analyze() must return NarrativeResult with non-empty prose."""
+    import librosa
+    sr = 22050
+    t = np.linspace(0, 30, sr * 30, endpoint=False)
+    audio = (0.1 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+
+    from audio_analysis.core.tt_stft_kernel import TTStftKernel, SpectrogramChunk
+    from audio_analysis.core.trajectory_analysis import TrajectoryAnalyzer
+
+    kernel = TTStftKernel(sr=sr)
+    chunk = kernel.process_file(audio, sr)
+    traj_az = TrajectoryAnalyzer(sr=sr)
+    trajectory = traj_az.analyze(chunk, audio)
+
+    az = NarrativeAnalyzer()
+    result = az.analyze("test_sine.wav", duration=30.0,
+                        trajectory=trajectory, audio=audio, sr=sr)
+
+    assert isinstance(result.narrative, str)
+    assert len(result.narrative) > 20
+    assert len(result.sections) >= 1
+    assert result.texture_fingerprint.shape == (10,)
+    assert isinstance(result.structure_fingerprint, list)
+
+
+def test_narrative_word_count():
+    """Narrative prose: 30–250 words."""
+    import librosa
+    sr = 22050
+    t = np.linspace(0, 60, sr * 60, endpoint=False)
+    envelope = np.linspace(0.01, 0.15, sr * 60)
+    audio = (envelope * np.sin(2 * np.pi * 220 * t)).astype(np.float32)
+
+    from audio_analysis.core.tt_stft_kernel import TTStftKernel
+    from audio_analysis.core.trajectory_analysis import TrajectoryAnalyzer
+
+    kernel = TTStftKernel(sr=sr)
+    chunk = kernel.process_file(audio, sr)
+    traj_az = TrajectoryAnalyzer(sr=sr)
+    trajectory = traj_az.analyze(chunk, audio)
+
+    az = NarrativeAnalyzer()
+    result = az.analyze("ramp_test.wav", duration=60.0,
+                        trajectory=trajectory, audio=audio, sr=sr)
+
+    word_count = len(result.narrative.split())
+    assert 30 <= word_count <= 250, f"word_count={word_count}: {result.narrative!r}"

@@ -3,7 +3,7 @@
 NarrativeAnalyzer: section detection, classification, motion descriptors,
 per-section mood/character, and prose generation.
 
-The pipeline has three stages:
+The pipeline has four stages:
 
   1. detect_sections(trajectory, duration)
        Runs a sliding-window change-point detector over the trajectory's
@@ -22,18 +22,79 @@ The pipeline has three stages:
        windows and returns a ``SectionMotion`` describing type, rate, and
        direction.
 
+  4. analyze(filename, duration, trajectory, audio, sr)
+       Full pipeline entry point: detect → classify → extract per-section
+       mood/character features → generate prose → compute fingerprints →
+       return a NarrativeResult.
+
 Usage:
     az = NarrativeAnalyzer()
     sections = az.detect_sections(trajectory, duration)
     az._classify_sections(sections, duration)
+
+    # Or, full pipeline:
+    result = az.analyze(filename, duration, trajectory, audio, sr)
 """
+import logging
 from typing import List
 
 import numpy as np
 
 from audio_analysis.core.narrative_types import (
-    Section, SectionMotion, TrajectoryPoint,
+    NarrativeResult, Section, SectionMotion, TrajectoryPoint,
 )
+
+# ------------------------------------------------------------------
+# Module-level prose templates and lookup tables
+# ------------------------------------------------------------------
+
+# Per-section-type sentence templates.  Keys match section_type values.
+# Placeholder tokens:
+#   {title}          — filename stem
+#   {time}           — "M:SS" formatted section start time
+#   {adverb}         — drawn from _ADVERBS keyed by tension_arc
+#   {intensity_word} — drawn from _INTENSITY keyed by section_type
+#   {mood_phrase}    — dominant_mood with underscores replaced by spaces
+#   {arc_phrase}     — tension_arc label
+#   {feature_phrase} — brief spectral description based on tension_arc
+_SECTION_OPENERS = {
+    "intro":   ["{title} begins with {mood_phrase}, setting a {arc_phrase} tone.",
+                "The piece opens {adverb} — {mood_phrase}."],
+    "rising":  ["Around {time}, the texture shifts — {mood_phrase} as {feature_phrase}.",
+                "From {time}, the energy climbs: {mood_phrase}."],
+    "plateau": ["A {intensity_word} plateau settles at {time} — {mood_phrase}.",
+                "The mood holds {adverb} through {time}: {mood_phrase}."],
+    "climax":  ["A {intensity_word} peak arrives at {time} — {mood_phrase}.",
+                "By {time} the tension peaks, {mood_phrase}."],
+    "falling": ["The intensity eases from {time} — {mood_phrase}.",
+                "Around {time}, the energy recedes: {mood_phrase}."],
+    "release": ["After {time}, {mood_phrase} — a sense of release.",
+                "The tension dissolves at {time}, leaving {mood_phrase}."],
+    "outro":   ["The piece closes {adverb} — {mood_phrase}.",
+                "A {mood_phrase} resolution carries through to the end."],
+}
+
+# Adverb lookup: tension_arc → descriptive adverb for template substitution.
+_ADVERBS = {
+    "building":  "quietly at first",
+    "peak":      "boldly",
+    "plateau":   "steadily",
+    "releasing": "gradually",
+    "valley":    "softly",
+}
+
+# Intensity adjective lookup: section_type → single descriptive word.
+_INTENSITY = {
+    "climax":   "intense",
+    "rising":   "growing",
+    "falling":  "ebbing",
+    "plateau":  "sustained",
+    "intro":    "gentle",
+    "outro":    "quiet",
+    "release":  "restful",
+}
+
+log = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------
 # Module-level constants
@@ -430,6 +491,317 @@ class NarrativeAnalyzer:
             direction = "stable"
 
         return SectionMotion(direction=direction, rate=rate, type=motion_type)
+
+    # ------------------------------------------------------------------
+    # Phase 4: full pipeline entry point
+    # ------------------------------------------------------------------
+
+    def analyze(
+        self,
+        filename: str,
+        duration: float,
+        trajectory: List[TrajectoryPoint],
+        audio: np.ndarray,
+        sr: int,
+    ) -> NarrativeResult:
+        """Full narrative pipeline: detect → classify → extract → prose → fingerprint.
+
+        This is the primary public API for the narrative system.  It runs all
+        four stages in sequence and returns a self-contained NarrativeResult
+        that can be stored, compared, or exported directly.
+
+        Parameters
+        ----------
+        filename:
+            Basename of the source audio file (no directory component).
+        duration:
+            Total audio duration in seconds.
+        trajectory:
+            Ordered list of TrajectoryPoint snapshots (typically one every
+            2 seconds) as produced by TrajectoryAnalyzer.
+        audio:
+            Raw audio time series as a float32 numpy array.
+        sr:
+            Sample rate of `audio` in Hz.
+
+        Returns
+        -------
+        NarrativeResult
+            Complete annotated result including prose narrative, sections,
+            structure fingerprint, and 10-dim texture fingerprint.
+        """
+        # Stage 1 + 2: detect section boundaries and classify them
+        sections = self.detect_sections(trajectory, duration)
+        self._classify_sections(sections, duration)
+
+        # Stage 3: run per-section mood/character extraction on raw audio slices
+        self._extract_section_features(sections, audio, sr)
+
+        # Stage 4: generate template-driven prose narrative
+        narrative_text = self._generate_narrative(filename, sections)
+
+        # Build compact structure fingerprint: [(section_type, tension_score), ...]
+        structure_fp = [(s.section_type, s.tension_score) for s in sections]
+
+        # Compute 10-dim L2-normalised texture fingerprint from trajectory statistics
+        texture_fp = self._texture_fingerprint(trajectory)
+
+        return NarrativeResult(
+            filename=filename,
+            duration=duration,
+            narrative=narrative_text,
+            sections=sections,
+            trajectory=trajectory,
+            structure_fingerprint=structure_fp,
+            texture_fingerprint=texture_fp,
+            similar_to=[],  # populated later by library-wide comparison pass
+        )
+
+    def _extract_section_features(
+        self, sections: List[Section], audio: np.ndarray, sr: int
+    ) -> None:
+        """Run MoodAnalyzer + CharacterAnalyzer on a ≤20 s audio slice per section.
+
+        Modifies each Section in-place, setting:
+        - ``dominant_mood``     — top mood descriptor string
+        - ``dominant_character`` — top character tag string
+        - ``instruments``       — full list of detected character tags
+
+        The audio slice is centred on the section midpoint and capped at 20 s
+        so that feature extraction stays fast even for long sections.  If any
+        analyser fails (import error, librosa error, etc.) the section keeps
+        its "unknown" placeholder values and a warning is logged rather than
+        propagating the exception.
+
+        Parameters
+        ----------
+        sections:
+            List of Section objects to annotate in-place.
+        audio:
+            Full audio time series.
+        sr:
+            Sample rate.
+        """
+        try:
+            from audio_analysis.analysis.mood_analyzer import MoodAnalyzer
+            from audio_analysis.analysis.character_analyzer import CharacterAnalyzer
+            from audio_analysis.core.feature_extraction_base import FeatureExtractionCore
+
+            mood_az = MoodAnalyzer()
+            char_az = CharacterAnalyzer()
+            # FeatureExtractionCore uses 'sample_rate' (not 'sr') in its constructor
+            core = FeatureExtractionCore(sample_rate=sr)
+        except Exception as exc:
+            log.warning("Could not initialise mood/character analysers: %s", exc)
+            return
+
+        for sec in sections:
+            # Build a ≤20 s slice centred on the section midpoint
+            mid = (sec.start + sec.end) / 2.0
+            slice_sec = min(20.0, sec.end - sec.start)
+            t_start = max(0.0, mid - slice_sec / 2.0)
+            t_end = min(len(audio) / sr, t_start + slice_sec)
+            s_start, s_end = int(t_start * sr), int(t_end * sr)
+            audio_slice = audio[s_start:s_end]
+
+            # Skip slices that are too short to analyse reliably
+            if len(audio_slice) < sr // 2:
+                continue
+
+            try:
+                # Extract spectral and temporal features from the section slice.
+                # We use the two lightweight methods instead of
+                # extract_comprehensive_features() to avoid requiring a file_path
+                # and duration argument.
+                spectral_feats = core.extract_spectral_features(audio_slice, sr)
+                temporal_feats = core.extract_temporal_features(audio_slice, sr)
+
+                # Build the phase_data dict expected by analyze_mood()
+                phase_data = {
+                    "avg_energy":    temporal_feats.get("rms_mean", 0.0),
+                    "avg_brightness": spectral_feats.get("spectral_centroid_mean", 0.0),
+                    "avg_roughness": spectral_feats.get("zero_crossing_rate_mean", 0.0),
+                    "onset_density": temporal_feats.get("onset_density", 0.0),
+                    "duration":      slice_sec,
+                }
+
+                # analyze_mood() takes (phase_data, spectral_features) and returns
+                # Tuple[List[str], Dict[str, float]]
+                mood_list, _mood_scores = mood_az.analyze_mood(phase_data, spectral_feats)
+                if mood_list:
+                    sec.dominant_mood = mood_list[0]
+
+                # analyze_character() takes a single spectral features dict and
+                # returns Tuple[List[str], Dict[str, float]]
+                char_list, _char_scores = char_az.analyze_character(spectral_feats)
+                if char_list:
+                    sec.instruments = char_list
+                    sec.dominant_character = char_list[0]
+
+            except Exception as exc:
+                log.warning(
+                    "Section feature extraction at %.1f s failed: %s", sec.start, exc
+                )
+
+    def _generate_narrative(self, filename: str, sections: List[Section]) -> str:
+        """Template-driven prose generation targeting 3–6 sentences, ~80–120 words.
+
+        Each section contributes at most one sentence (selected by cycling
+        through the template list for that section_type).  When new character
+        tags appear in a section that were not present in the previous section,
+        a short instrument-description sentence is appended.  The loop stops
+        after 6 sentences to keep the prose concise.  If fewer than 3 sentences
+        have been generated once all sections are processed, filler sentences are
+        appended so the output always meets the 30-word minimum.
+
+        Parameters
+        ----------
+        filename:
+            Source audio filename, used to extract a display title.
+        sections:
+            Classified, mood/character-annotated list of sections.
+
+        Returns
+        -------
+        str
+            Space-joined prose paragraph.
+        """
+        if not sections:
+            return f"{filename} — insufficient data for narrative."
+
+        # Use the filename stem (no extension) as the title in opening sentences
+        title = filename.rsplit(".", 1)[0] if "." in filename else filename
+        sentences: list = []
+        prev_instruments: set = set()
+
+        for i, sec in enumerate(sections):
+            # Select the template for this section type, cycling if there are
+            # more sections than templates
+            templates = _SECTION_OPENERS.get(
+                sec.section_type, _SECTION_OPENERS["plateau"]
+            )
+            template = templates[i % len(templates)]
+
+            # Substitute all placeholders into the template
+            sentence = template.format(
+                title=title,
+                time=self._format_time(sec.start),
+                adverb=_ADVERBS.get(sec.tension_arc, "steadily"),
+                intensity_word=_INTENSITY.get(sec.section_type, "sustained"),
+                mood_phrase=sec.dominant_mood.replace("_", " "),
+                arc_phrase=sec.tension_arc,
+                feature_phrase=(
+                    "brightness rises"
+                    if sec.tension_arc in ("building", "peak")
+                    else "textures dissolve"
+                ),
+            )
+            sentences.append(sentence)
+
+            # If new character tags appeared in this section (vs. the previous
+            # one), append a brief instrument-description sentence.
+            new_instr = set(sec.instruments) - prev_instruments
+            if new_instr and i > 0:
+                instr_str = (
+                    ", ".join(sorted(new_instr)[:2]).replace("_", " ")
+                )
+                sentences.append(f"A {instr_str} character emerges here.")
+            prev_instruments = set(sec.instruments)
+
+            # Cap at 6 sentences to maintain conciseness
+            if len(sentences) >= 6:
+                break
+
+        # Pad to at least 3 sentences so word-count assertions are met
+        while len(sentences) < 3:
+            sec = sections[min(len(sentences), len(sections) - 1)]
+            sentences.append(
+                f"The {sec.section_type} section at {self._format_time(sec.start)}"
+                " continues the arc."
+            )
+
+        # Ensure the final prose meets the 30-word minimum.  When the template
+        # sentences are short (single-word mood placeholders, etc.) we append a
+        # brief closing summary drawn from the last section.
+        joined = " ".join(sentences)
+        if len(joined.split()) < 30:
+            last = sections[-1]
+            summary = (
+                f"Overall, the piece spans {self._format_time(int(last.end))} and "
+                f"moves through {len(sections)} section"
+                f"{'s' if len(sections) != 1 else ''}, "
+                f"with a {last.tension_arc} character that defines its final texture."
+            )
+            joined = joined + " " + summary
+
+        return joined
+
+    def _format_time(self, seconds: float) -> str:
+        """Format a time in seconds as 'M:SS' (e.g. 93.0 → '1:33').
+
+        Parameters
+        ----------
+        seconds:
+            Time in seconds (non-negative float).
+
+        Returns
+        -------
+        str
+            Human-readable 'M:SS' string.
+        """
+        m, s = int(seconds) // 60, int(seconds) % 60
+        return f"{m}:{s:02d}"
+
+    def _texture_fingerprint(self, trajectory: List[TrajectoryPoint]) -> np.ndarray:
+        """Compute a 10-dimensional L2-normalised texture fingerprint.
+
+        The fingerprint summarises the piece's average and variability of five
+        trajectory features:
+
+          dims 0–1  energy          (mean, std)
+          dims 2–3  brightness      (mean, std)
+          dims 4–5  roughness       (mean, std)
+          dims 6–7  tension_score   (mean, std)
+          dim  8    chroma_spread   (mean only)
+          dim  9    relative duration  min(total_seconds / 600, 1.0)
+
+        The vector is L2-normalised so that cosine-similarity comparisons
+        between tracks are straightforward.  Returns a zero vector for empty
+        trajectories.
+
+        Parameters
+        ----------
+        trajectory:
+            Full-piece ordered list of TrajectoryPoint objects.
+
+        Returns
+        -------
+        numpy.ndarray
+            Shape (10,), dtype float32, L2-normalised (or all-zeros if the
+            trajectory is empty or its norm is negligibly small).
+        """
+        if not trajectory:
+            return np.zeros(10, dtype=np.float32)
+
+        energies   = [tp.energy for tp in trajectory]
+        brightness = [tp.brightness for tp in trajectory]
+        roughness  = [tp.roughness for tp in trajectory]
+        tensions   = [tp.tension_score for tp in trajectory]
+        spreads    = [tp.chroma_spread for tp in trajectory]
+        duration   = trajectory[-1].time - trajectory[0].time
+
+        vec = np.array([
+            np.mean(energies),    np.std(energies),
+            np.mean(brightness),  np.std(brightness),
+            np.mean(roughness),   np.std(roughness),
+            np.mean(tensions),    np.std(tensions),
+            np.mean(spreads),
+            # Normalise duration to [0, 1] using 10 minutes as the reference maximum
+            min(duration / 600.0, 1.0),
+        ], dtype=np.float32)
+
+        norm = np.linalg.norm(vec)
+        return vec / norm if norm > 1e-9 else vec
 
     # ------------------------------------------------------------------
     # Boundary helpers
