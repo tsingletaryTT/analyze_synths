@@ -16,8 +16,8 @@ The descriptors are organized into two main categories:
 - Character Tags: Instrument and synthesis characteristics
 """
 
-from typing import List, Dict, Any
-from dataclasses import dataclass
+from typing import List, Dict, Any, Optional
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -43,9 +43,13 @@ class MoodDescriptor:
 class CharacterTag:
     """
     Definition of a character tag with its technical characteristics.
-    
+
     This class defines the technical criteria used to identify
     different synthesizer types and sound sources.
+
+    Optional extended features (spectral_flatness_range, spectral_flux_range,
+    stereo_width_range) are scored in addition to the core four when present.
+    confidence_threshold overrides the global threshold for this specific tag.
     """
     name: str
     description: str
@@ -53,7 +57,13 @@ class CharacterTag:
     spectral_bandwidth_range: tuple
     spectral_rolloff_range: tuple
     zero_crossing_rate_range: tuple
-    mfcc_characteristics: Dict[str, Any]
+    mfcc_characteristics: Any  # str ('neutral', 'bright', 'dark') or legacy Dict
+    # Optional extended feature ranges — None means not scored for this tag
+    spectral_flatness_range: Optional[tuple] = None
+    spectral_flux_range: Optional[tuple] = None
+    stereo_width_range: Optional[tuple] = None
+    # Per-tag confidence threshold; 0.0 means use the caller-supplied global threshold
+    confidence_threshold: float = 0.0
 
 
 class MoodDescriptors:
@@ -98,7 +108,8 @@ class MoodDescriptors:
             roughness_range=(0.0, 0.05),
             onset_density_range=(0.0, float('inf')),
             duration_threshold=0.0,
-            spectral_bandwidth_range=(0.0, 1000)
+            # Tightened from 1000 Hz to 800 Hz: speech codec narrowing sits above 800 Hz
+            spectral_bandwidth_range=(0.0, 800)
         ),
         
         'oozy': MoodDescriptor(
@@ -1663,7 +1674,72 @@ class CharacterTags:
             spectral_rolloff_range=(2000, 5000),
             zero_crossing_rate_range=(0.05, 0.2),
             mfcc_characteristics={'pattern': 'repetitive', 'timing': 'precise'}
-        )
+        ),
+
+        # ── New content-type tags ──────────────────────────────────────────────
+
+        'spoken_word': CharacterTag(
+            name='spoken_word',
+            description='Spoken voice content — lectures, poetry, narration',
+            spectral_centroid_range=(200, 3800),
+            spectral_bandwidth_range=(800, 4000),
+            spectral_rolloff_range=(0.0, float('inf')),
+            zero_crossing_rate_range=(0.04, 0.28),
+            mfcc_characteristics='neutral',
+            spectral_flatness_range=(0.05, 0.65),
+            confidence_threshold=0.55,
+        ),
+
+        'guitar': CharacterTag(
+            name='guitar',
+            description='Guitar (acoustic or electric) with transient-rich attack',
+            spectral_centroid_range=(500, 4000),
+            spectral_bandwidth_range=(1000, 3500),
+            spectral_rolloff_range=(1500, float('inf')),
+            zero_crossing_rate_range=(0.04, 0.25),
+            mfcc_characteristics='neutral',
+            spectral_flatness_range=(0.05, 0.35),
+            confidence_threshold=0.55,
+        ),
+
+        'live_drums': CharacterTag(
+            name='live_drums',
+            description='Acoustic drum kit or live percussion with noisy transients',
+            spectral_centroid_range=(1000, float('inf')),
+            spectral_bandwidth_range=(1500, float('inf')),
+            spectral_rolloff_range=(2500, float('inf')),
+            zero_crossing_rate_range=(0.10, float('inf')),
+            mfcc_characteristics='neutral',
+            spectral_flatness_range=(0.10, 0.70),
+            spectral_flux_range=(50.0, float('inf')),
+            confidence_threshold=0.60,
+        ),
+
+        'laughter': CharacterTag(
+            name='laughter',
+            description='Human laughter — bursty, breathy, voiced/unvoiced mix',
+            spectral_centroid_range=(600, 3500),
+            spectral_bandwidth_range=(1000, 4000),
+            spectral_rolloff_range=(0.0, float('inf')),
+            zero_crossing_rate_range=(0.10, 0.40),
+            mfcc_characteristics='neutral',
+            spectral_flatness_range=(0.15, 0.70),
+            confidence_threshold=0.60,
+        ),
+
+        'wide_stereo': CharacterTag(
+            name='wide_stereo',
+            description='Meaningfully wide stereo field — L/R divergence > 0.25',
+            # These four ranges are fully open so they never subtract from the score.
+            # The only gate is stereo_width_range, which carries all the weight.
+            spectral_centroid_range=(0.0, float('inf')),
+            spectral_bandwidth_range=(0.0, float('inf')),
+            spectral_rolloff_range=(0.0, float('inf')),
+            zero_crossing_rate_range=(0.0, float('inf')),
+            mfcc_characteristics='neutral',
+            stereo_width_range=(0.25, float('inf')),
+            confidence_threshold=0.80,
+        ),
     }
     
     # Texture tags (20 total)

@@ -87,13 +87,24 @@ class FeatureExtractionCore:
         spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)[0]
         spectral_bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr)[0]
         zero_crossing_rate = librosa.feature.zero_crossing_rate(y)[0]
-        
+
+        # Spectral flatness: 0=tonal (pure sine), 1=noise-like (white noise).
+        # High for speech consonants, drums, breath. Low for synth pads and pure tones.
+        spectral_flatness = librosa.feature.spectral_flatness(y=y)[0]
+
+        # Spectral flux: mean squared frame-to-frame spectral change.
+        # High for drums/guitar (sudden transients), low for sustained drones/pads.
+        S = np.abs(librosa.stft(y, n_fft=2048, hop_length=512))
+        spectral_flux = float(np.mean(np.diff(S, axis=1) ** 2))
+
         return {
             'spectral_centroid_mean': float(np.mean(spectral_centroids)),
             'spectral_centroid_std': float(np.std(spectral_centroids)),
             'spectral_rolloff_mean': float(np.mean(spectral_rolloff)),
             'spectral_bandwidth_mean': float(np.mean(spectral_bandwidth)),
             'zero_crossing_rate_mean': float(np.mean(zero_crossing_rate)),
+            'spectral_flatness_mean': float(np.mean(spectral_flatness)),
+            'spectral_flux_mean': spectral_flux,
         }
     
     def extract_temporal_features(self, y: np.ndarray, sr: int) -> Dict[str, float]:
@@ -246,12 +257,28 @@ class FeatureExtractionCore:
         spectral_features = self.extract_spectral_features(y, sr)
         temporal_features = self.extract_temporal_features(y, sr)
         harmonic_features = self.extract_harmonic_features(y, sr)
-        
+
+        # Stereo width: L-R difference as a fraction of L+R energy.
+        # 0.0 = mono or perfectly centred; > 0.3 = meaningfully wide stereo.
+        # Loaded separately from the mono y used for all other features.
+        try:
+            y_st, _ = librosa.load(str(file_path), sr=sr, mono=False)
+            if y_st.ndim == 2 and y_st.shape[0] == 2:
+                L, R = y_st[0], y_st[1]
+                stereo_width = float(
+                    np.mean(np.abs(L - R)) / (np.mean(np.abs(L + R)) + 1e-8)
+                )
+            else:
+                stereo_width = 0.0
+        except Exception:
+            stereo_width = 0.0
+
         # Combine all features
         features.update(spectral_features)
         features.update(temporal_features)
         features.update(harmonic_features)
-        
+        features['stereo_width'] = stereo_width
+
         return features
     
     def extract_basic_spectral_features(self, y: np.ndarray, sr: int) -> Dict[str, float]:

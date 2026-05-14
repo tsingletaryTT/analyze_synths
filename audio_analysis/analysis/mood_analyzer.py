@@ -103,14 +103,21 @@ class MoodAnalyzer:
         
         # Test each mood descriptor
         for mood_name, descriptor in self.mood_descriptors.items():
+            # Exclude 'synthetic' from speech/voice content.
+            # True synthesised sounds (pads, drones) have ZCR < 0.05; speech and
+            # acoustic instruments alternate voiced/unvoiced frames keeping ZCR above 0.05.
+            if mood_name == 'synthetic' and zero_crossing_rate > 0.05:
+                confidence_scores[mood_name] = 0.0
+                continue
+
             confidence = self._calculate_mood_confidence(
-                descriptor, energy, brightness, roughness, onset_density, 
-                duration, spectral_centroid, spectral_bandwidth, spectral_rolloff, 
+                descriptor, energy, brightness, roughness, onset_density,
+                duration, spectral_centroid, spectral_bandwidth, spectral_rolloff,
                 zero_crossing_rate
             )
-            
+
             confidence_scores[mood_name] = confidence
-            
+
             # Add mood if confidence exceeds threshold
             if confidence >= confidence_threshold:
                 detected_moods.append(mood_name)

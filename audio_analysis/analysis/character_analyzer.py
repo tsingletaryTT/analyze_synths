@@ -93,13 +93,15 @@ class CharacterAnalyzer:
         for tag_name, tag_definition in self.character_tags.items():
             confidence = self._calculate_character_confidence(
                 tag_definition, spectral_centroid, spectral_bandwidth,
-                spectral_rolloff, zero_crossing_rate, mfcc_features
+                spectral_rolloff, zero_crossing_rate, mfcc_features,
+                spectral_features
             )
-            
+
             confidence_scores[tag_name] = confidence
-            
-            # Add character if confidence exceeds threshold
-            if confidence >= confidence_threshold:
+
+            # Per-tag threshold overrides the global caller-supplied threshold
+            effective_threshold = tag_definition.confidence_threshold or confidence_threshold
+            if confidence >= effective_threshold:
                 detected_characters.append(tag_name)
         
         # If no characters detected, use fallback analysis
@@ -154,14 +156,16 @@ class CharacterAnalyzer:
     def _calculate_character_confidence(self, tag_definition: CharacterTag,
                                       spectral_centroid: float, spectral_bandwidth: float,
                                       spectral_rolloff: float, zero_crossing_rate: float,
-                                      mfcc_characteristics: Dict[str, float]) -> float:
+                                      mfcc_characteristics: Dict[str, float],
+                                      spectral_features: Dict[str, float] = None) -> float:
         """
         Calculate confidence score for a specific character tag.
-        
-        This method evaluates how well the audio characteristics match
-        the defined criteria for a specific character. It uses a weighted
-        scoring system that considers multiple spectral factors.
-        
+
+        Core four features are always scored. Optional extended features
+        (spectral_flatness_range, spectral_flux_range, stereo_width_range) are
+        scored only when the tag defines them AND the feature is present in
+        spectral_features.
+
         Args:
             tag_definition: CharacterTag to evaluate
             spectral_centroid: Spectral centroid value
@@ -169,55 +173,79 @@ class CharacterAnalyzer:
             spectral_rolloff: Spectral rolloff value
             zero_crossing_rate: Zero-crossing rate value
             mfcc_characteristics: Dictionary with MFCC characteristics
-            
+            spectral_features: Full feature dict for extended feature access
+
         Returns:
             Confidence score (0.0 to 1.0)
         """
+        if spectral_features is None:
+            spectral_features = {}
+
         score = 0.0
         max_score = 0.0
-        
+
         # Spectral centroid criterion (weight: 3.0)
-        # Critical for distinguishing brightness characteristics
         centroid_weight = 3.0
         if self._in_range(spectral_centroid, tag_definition.spectral_centroid_range):
             score += centroid_weight
         max_score += centroid_weight
-        
+
         # Spectral bandwidth criterion (weight: 3.5)
-        # Most important for distinguishing synthesis types
         bandwidth_weight = 3.5
         if self._in_range(spectral_bandwidth, tag_definition.spectral_bandwidth_range):
             score += bandwidth_weight
         max_score += bandwidth_weight
-        
+
         # Spectral rolloff criterion (weight: 2.5)
-        # Important for harmonic content analysis
         rolloff_weight = 2.5
         if self._in_range(spectral_rolloff, tag_definition.spectral_rolloff_range):
             score += rolloff_weight
         max_score += rolloff_weight
-        
+
         # Zero-crossing rate criterion (weight: 2.0)
-        # Important for texture analysis
         zcr_weight = 2.0
         if self._in_range(zero_crossing_rate, tag_definition.zero_crossing_rate_range):
             score += zcr_weight
         max_score += zcr_weight
-        
-        # MFCC characteristics (weight: 1.5)
-        # Provides timbre fingerprint
+
+        # MFCC characteristics (weight: 1.5) — only when data is available
         mfcc_weight = 1.5
         if self._evaluate_mfcc_characteristics(tag_definition.mfcc_characteristics, mfcc_characteristics):
             score += mfcc_weight
         max_score += mfcc_weight
-        
+
+        # Optional extended feature criteria — scored only when tag defines a range
+        # and the feature was actually extracted.
+
+        # Spectral flatness (weight: 3.0): noise-like (1.0) vs tonal (0.0)
+        if tag_definition.spectral_flatness_range is not None:
+            flatness = spectral_features.get('spectral_flatness_mean')
+            max_score += 3.0  # always counts against max so missing feature penalises
+            if flatness is not None and self._in_range(flatness, tag_definition.spectral_flatness_range):
+                score += 3.0
+
+        # Spectral flux (weight: 2.5): transient energy between frames
+        if tag_definition.spectral_flux_range is not None:
+            flux = spectral_features.get('spectral_flux_mean')
+            max_score += 2.5
+            if flux is not None and self._in_range(flux, tag_definition.spectral_flux_range):
+                score += 2.5
+
+        # Stereo width (weight: 5.0): L-R divergence ratio
+        # Always counts against max so the tag cannot fire when stereo_width is absent.
+        if tag_definition.stereo_width_range is not None:
+            width = spectral_features.get('stereo_width')
+            max_score += 5.0
+            if width is not None and self._in_range(width, tag_definition.stereo_width_range):
+                score += 5.0
+
         # Calculate normalized confidence
         confidence = score / max_score if max_score > 0 else 0.0
-        
+
         # Apply bonus for strong matches
         if confidence > 0.85:
             confidence = min(1.0, confidence * 1.05)
-        
+
         return confidence
     
     def _in_range(self, value: float, range_tuple: Tuple[float, float]) -> bool:
@@ -234,43 +262,56 @@ class CharacterAnalyzer:
         from ..utils.validation import validate_range
         return validate_range(value, range_tuple)
     
-    def _evaluate_mfcc_characteristics(self, expected_chars: Dict[str, Any],
-                                     actual_chars: Dict[str, float]) -> bool:
+    def _evaluate_mfcc_characteristics(self, expected_chars, actual_chars: Dict[str, float]) -> bool:
         """
         Evaluate MFCC characteristics against expected patterns.
-        
-        This method checks if the actual MFCC characteristics match
-        the expected patterns for a specific character type.
-        
+
+        New-style tags pass a string: 'neutral' (always True), 'bright' (mfcc_1_mean > -10),
+        or 'dark' (mfcc_1_mean < -10).  Legacy tags pass a dict with 'precision' or
+        'complexity' keys.  Legacy dict tags that specify neither key fall through to True
+        (neutral behaviour) just as before.
+
         Args:
-            expected_chars: Expected MFCC characteristics
-            actual_chars: Actual MFCC characteristics
-            
+            expected_chars: str or dict describing expected MFCC characteristics
+            actual_chars: Actual computed MFCC characteristics dict
+
         Returns:
             True if characteristics match, False otherwise
         """
-        # For now, we'll use a simple heuristic based on MFCC variance
-        # In a full implementation, this would be more sophisticated
-        
+        # New-style: string descriptor
+        if isinstance(expected_chars, str):
+            if expected_chars == 'neutral':
+                return True
+            mfcc1 = actual_chars.get('mfcc_1_mean')
+            if mfcc1 is None:
+                return True  # no data — don't penalize
+            if expected_chars == 'bright':
+                return mfcc1 > -10
+            if expected_chars == 'dark':
+                return mfcc1 < -10
+            return True  # unknown string → neutral
+
+        # Legacy-style: dict descriptor
+        if not isinstance(expected_chars, dict):
+            return True
+
         if 'precision' in expected_chars:
             precision_level = expected_chars['precision']
             mfcc_variance = actual_chars.get('mfcc_variance', 0)
-            
-            if precision_level == 'high' and mfcc_variance < 0.5:
-                return True
-            elif precision_level == 'low' and mfcc_variance > 0.5:
-                return True
-        
+            if precision_level == 'high':
+                return mfcc_variance < 0.5
+            if precision_level == 'low':
+                return mfcc_variance > 0.5
+
         if 'complexity' in expected_chars:
             complexity_level = expected_chars['complexity']
             mfcc_variance = actual_chars.get('mfcc_variance', 0)
-            
-            if complexity_level == 'high' and mfcc_variance > 0.8:
-                return True
-            elif complexity_level == 'low' and mfcc_variance < 0.3:
-                return True
-        
-        # Default to neutral evaluation
+            if complexity_level == 'high':
+                return mfcc_variance > 0.8
+            if complexity_level == 'low':
+                return mfcc_variance < 0.3
+
+        # Dict has keys we don't recognise — neutral
         return True
     
     def _get_fallback_character(self, spectral_centroid: float, spectral_bandwidth: float,
