@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>analyze_synths — a composer's hardware experiment</title>
+<title>analyze_synths &mdash; a composer&rsquo;s hardware experiment</title>
 <style>
   :root {
     --bg:        #09171f;
@@ -17,366 +17,101 @@
     --yellow:    #F4C471;
     --green:     #27AE60;
     --red:       #FF6B6B;
-    --purple:    #9B8FD4;
     --text:      #E8F0F2;
     --text-dim:  #7a9aaa;
     --text-mute: #3d6070;
     --mono:      'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
     --sans:      -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   }
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
   html { scroll-behavior: smooth; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 15px;
-    line-height: 1.65;
-  }
-
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.65; }
   a { color: var(--teal); text-decoration: none; }
   a:hover { text-decoration: underline; }
 
-  /* ── Nav ── */
   nav {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background: rgba(9, 23, 31, 0.92);
-    backdrop-filter: blur(12px);
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(9,23,31,0.93); backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 2rem;
-    padding: 0.75rem 2rem;
+    display: flex; align-items: center; gap: 2rem; padding: 0.75rem 2rem;
   }
-  .nav-brand {
-    font-family: var(--mono);
-    font-size: 0.95rem;
-    color: var(--teal);
-    font-weight: 600;
-    letter-spacing: -0.02em;
-  }
-  nav ul {
-    list-style: none;
-    display: flex;
-    gap: 1.5rem;
-    margin-left: auto;
-  }
-  nav ul a {
-    font-size: 0.82rem;
-    color: var(--text-dim);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
+  .nav-brand { font-family: var(--mono); font-size: 0.95rem; color: var(--teal); font-weight: 600; letter-spacing: -0.02em; }
+  nav ul { list-style: none; display: flex; gap: 1.5rem; margin-left: auto; }
+  nav ul a { font-size: 0.82rem; color: var(--text-dim); letter-spacing: 0.04em; text-transform: uppercase; }
   nav ul a:hover { color: var(--teal); text-decoration: none; }
 
-  /* ── Layout ── */
-  .container {
-    max-width: 1060px;
-    margin: 0 auto;
-    padding: 0 2rem;
-  }
-
+  .container { max-width: 1060px; margin: 0 auto; padding: 0 2rem; }
   section { padding: 4.5rem 0; }
   section + section { border-top: 1px solid var(--border); }
+  h2 { font-size: 1.55rem; font-weight: 600; color: var(--teal-text); margin-bottom: 0.4rem; letter-spacing: -0.02em; }
+  .section-sub { color: var(--text-dim); margin-bottom: 2.5rem; font-size: 0.9rem; }
 
-  h2 {
-    font-size: 1.55rem;
-    font-weight: 600;
-    color: var(--teal-text);
-    margin-bottom: 0.4rem;
-    letter-spacing: -0.02em;
-  }
-  .section-sub {
-    color: var(--text-dim);
-    margin-bottom: 2.5rem;
-    font-size: 0.9rem;
-  }
-
-  /* ── Hero ── */
-  #hero {
-    padding: 6rem 0 5rem;
-    border-bottom: 1px solid var(--border);
-  }
-  .hero-eyebrow {
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    color: var(--teal-dim);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    margin-bottom: 1.2rem;
-  }
-  .hero-title {
-    font-size: clamp(2.4rem, 5vw, 3.8rem);
-    font-weight: 700;
-    line-height: 1.1;
-    letter-spacing: -0.04em;
-    margin-bottom: 1.4rem;
-    color: var(--text);
-  }
+  /* hero */
+  #hero { padding: 6rem 0 5rem; border-bottom: 1px solid var(--border); }
+  .hero-eyebrow { font-family: var(--mono); font-size: 0.75rem; color: var(--teal-dim); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 1.2rem; }
+  .hero-title { font-size: clamp(2.4rem,5vw,3.8rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.04em; margin-bottom: 1.4rem; }
   .hero-title span { color: var(--teal); }
-  .hero-desc {
-    font-size: 1.1rem;
-    color: var(--text-dim);
-    max-width: 580px;
-    line-height: 1.7;
-    margin-bottom: 2.5rem;
-  }
-  .hero-stats {
-    display: flex;
-    gap: 2.5rem;
-    flex-wrap: wrap;
-  }
-  .hero-stat-value {
-    font-family: var(--mono);
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--teal);
-    line-height: 1;
-    margin-bottom: 0.25rem;
-  }
-  .hero-stat-label {
-    font-size: 0.78rem;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .hero-divider {
-    width: 2px;
-    background: var(--border);
-    align-self: stretch;
-    min-height: 3rem;
-  }
+  .hero-desc { font-size: 1.1rem; color: var(--text-dim); max-width: 580px; line-height: 1.7; margin-bottom: 2.5rem; }
+  .hero-stats { display: flex; gap: 2.5rem; flex-wrap: wrap; align-items: center; }
+  .hero-stat-value { font-family: var(--mono); font-size: 2rem; font-weight: 700; color: var(--teal); line-height: 1; margin-bottom: 0.25rem; }
+  .hero-stat-label { font-size: 0.78rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+  .hero-divider { width: 1px; background: var(--border); align-self: stretch; min-height: 3rem; }
 
-  /* ── Story ── */
-  .story-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 3rem 4rem;
-  }
-  @media (max-width: 700px) {
-    .story-grid { grid-template-columns: 1fr; }
-  }
-  .story-block h3 {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--teal);
-    margin-bottom: 0.7rem;
-    font-weight: 600;
-  }
-  .story-block p {
-    color: var(--text-dim);
-    font-size: 0.92rem;
-    line-height: 1.75;
-  }
+  /* story */
+  .story-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem 4rem; }
+  @media (max-width: 700px) { .story-grid { grid-template-columns: 1fr; } }
+  .story-block h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--teal); margin-bottom: 0.7rem; font-weight: 600; }
+  .story-block p { color: var(--text-dim); font-size: 0.92rem; line-height: 1.75; }
   .story-block p + p { margin-top: 0.8rem; }
-  .story-block code {
-    font-family: var(--mono);
-    font-size: 0.8rem;
-    color: var(--teal-text);
-    background: var(--bg-raised);
-    padding: 0.1em 0.35em;
-    border-radius: 3px;
-  }
+  .story-block code { font-family: var(--mono); font-size: 0.78rem; color: var(--teal-text); background: var(--bg-raised); padding: 0.1em 0.35em; border-radius: 3px; }
 
-  /* ── Benchmark ── */
-  .bench-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-family: var(--mono);
-    font-size: 0.82rem;
-    margin-bottom: 2rem;
-  }
-  .bench-table th {
-    text-align: left;
-    color: var(--text-dim);
-    font-weight: 500;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    padding: 0.6rem 1rem 0.6rem 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .bench-table td {
-    padding: 0.55rem 1rem 0.55rem 0;
-    border-bottom: 1px solid rgba(30, 58, 74, 0.5);
-    color: var(--text);
-  }
+  /* benchmarks */
+  .bench-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 0.82rem; margin-bottom: 2rem; }
+  .bench-table th { text-align: left; color: var(--text-dim); font-weight: 500; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; padding: 0.6rem 1rem 0.6rem 0; border-bottom: 1px solid var(--border); }
+  .bench-table td { padding: 0.55rem 1rem 0.55rem 0; border-bottom: 1px solid rgba(30,58,74,0.5); }
   .bench-table tr:last-child td { border-bottom: none; }
-  .bench-table .filename { color: var(--text-dim); max-width: 280px; }
-  .bench-table .rtf { color: var(--teal); font-weight: 600; }
-  .bench-table .hw-time { color: var(--text); }
-  .bench-total td { color: var(--teal-text) !important; font-weight: 600; }
-  .bench-total { border-top: 1px solid var(--teal-dim) !important; }
-
+  .filename { color: var(--text-dim); }
+  .tdim { color: var(--text-dim) !important; }
+  .hw-time { color: var(--text); }
+  .rtf { color: var(--teal); font-weight: 600; }
   .rtf-bar-row { display: flex; align-items: center; gap: 0.7rem; }
-  .rtf-bar {
-    height: 4px;
-    border-radius: 2px;
-    background: var(--teal);
-    opacity: 0.7;
-    min-width: 2px;
-  }
+  .rtf-bar { height: 4px; border-radius: 2px; background: var(--teal); opacity: 0.65; }
+  .bench-total td { color: var(--teal-text) !important; font-weight: 600; border-top: 1px solid var(--teal-dim) !important; }
 
-  .bench-comparison {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin-top: 1.5rem;
-  }
-  @media (max-width: 600px) {
-    .bench-comparison { grid-template-columns: 1fr; }
-  }
-  .bench-cmp-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.2rem 1.4rem;
-  }
-  .bench-cmp-card.highlight { border-color: var(--teal-dim); }
-  .bench-cmp-label {
-    font-size: 0.72rem;
-    color: var(--text-mute);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 0.4rem;
-  }
-  .bench-cmp-value {
-    font-family: var(--mono);
-    font-size: 1.8rem;
-    font-weight: 700;
-    color: var(--teal);
-    line-height: 1;
-    margin-bottom: 0.2rem;
-  }
-  .bench-cmp-card:not(.highlight) .bench-cmp-value { color: var(--text-dim); }
-  .bench-cmp-sub {
-    font-size: 0.78rem;
-    color: var(--text-mute);
-  }
+  .bench-cmp { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-top: 1.5rem; }
+  @media (max-width: 600px) { .bench-cmp { grid-template-columns: 1fr; } }
+  .cmp-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem 1.4rem; }
+  .cmp-card.hl { border-color: var(--teal-dim); }
+  .cmp-label { font-size: 0.72rem; color: var(--text-mute); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem; }
+  .cmp-value { font-family: var(--mono); font-size: 1.8rem; font-weight: 700; color: var(--teal); line-height: 1; margin-bottom: 0.2rem; }
+  .cmp-card:not(.hl) .cmp-value { color: var(--text-dim); }
+  .cmp-sub { font-size: 0.78rem; color: var(--text-mute); }
 
-  /* ── Library cards ── */
-  .library-grid {
-    display: grid;
-    gap: 1px;
-    background: var(--border);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    overflow: hidden;
-  }
-  .track-card {
-    background: var(--bg-card);
-    padding: 1.5rem 1.8rem;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 1rem 2rem;
-    align-items: start;
-    transition: background 0.15s;
-  }
-  .track-card:hover { background: var(--bg-raised); }
-
-  .track-header {
-    display: flex;
-    align-items: baseline;
-    gap: 0.8rem;
-    flex-wrap: wrap;
-    margin-bottom: 0.5rem;
-  }
-  .track-title {
-    font-weight: 600;
-    font-size: 0.95rem;
-    color: var(--text);
-    letter-spacing: -0.01em;
-  }
-  .track-meta {
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    color: var(--text-mute);
-  }
-
-  .track-narrative {
-    font-size: 0.83rem;
-    color: var(--text-dim);
-    line-height: 1.6;
-    margin-bottom: 0.9rem;
-  }
-
-  .track-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-bottom: 0.75rem;
-  }
-  .tag {
-    font-size: 0.68rem;
-    padding: 0.2em 0.55em;
-    border-radius: 3px;
-    font-weight: 500;
-    letter-spacing: 0.03em;
-    text-transform: lowercase;
-    border: 1px solid;
-  }
-
-  .track-similar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.72rem;
-  }
-  .similar-label {
-    color: var(--text-mute);
-    margin-right: 0.1rem;
-  }
-  .similar-chip {
-    background: var(--bg-raised);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 0.15em 0.5em;
-    color: var(--text-dim);
-    font-size: 0.68rem;
-    cursor: pointer;
-    transition: border-color 0.1s, color 0.1s;
-  }
-  .similar-chip:hover {
-    border-color: var(--teal-dim);
-    color: var(--teal-text);
-  }
-
+  /* library */
+  .library-grid { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .track-card { background: var(--bg-card); padding: 1.5rem 1.8rem; display: grid; grid-template-columns: 1fr auto; gap: 1rem 2rem; align-items: start; transition: background 0.15s; }
+  .track-card:target { background: var(--bg-raised); outline: 1px solid var(--teal-dim); }
+  .track-header { display: flex; align-items: baseline; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+  .track-title { font-weight: 600; font-size: 0.95rem; letter-spacing: -0.01em; }
+  .track-meta { font-family: var(--mono); font-size: 0.72rem; color: var(--text-mute); }
+  .track-narrative { font-size: 0.83rem; color: var(--text-dim); line-height: 1.6; margin-bottom: 0.9rem; }
+  .track-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.75rem; }
+  .tag { font-size: 0.68rem; padding: 0.2em 0.55em; border-radius: 3px; font-weight: 500; border: 1px solid; background: transparent; }
+  .track-similar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; font-size: 0.72rem; }
+  .similar-label { color: var(--text-mute); }
+  .similar-chip { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 3px; padding: 0.15em 0.5em; color: var(--text-dim); font-size: 0.68rem; display: inline-block; }
+  .similar-chip:hover { border-color: var(--teal-dim); color: var(--teal-text); text-decoration: none; }
   .track-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.6rem; }
-
-  .track-stats {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.2rem;
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    color: var(--text-mute);
-    white-space: nowrap;
-  }
-  .track-stats .sections-count { color: var(--teal); font-weight: 600; font-size: 0.85rem; }
-
-  .sparkline-wrap {
-    position: relative;
-    width: 200px;
-  }
-  .sparkline-wrap svg {
-    display: block;
-  }
-  .tension-label {
-    font-family: var(--mono);
-    font-size: 0.62rem;
-    color: var(--text-mute);
-    text-align: right;
-    margin-top: 0.2rem;
-  }
-
+  .track-stats { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; font-family: var(--mono); font-size: 0.72rem; color: var(--text-mute); white-space: nowrap; }
+  .sections-count { color: var(--teal); font-weight: 600; font-size: 0.85rem; }
+  .tension-meter { display: flex; align-items: center; gap: 0.4rem; }
+  .tlabel { font-size: 0.7rem; color: var(--text-mute); }
+  .tension-track { width: 48px; height: 4px; background: var(--bg-raised); border-radius: 2px; overflow: hidden; }
+  .tension-fill { height: 100%; border-radius: 2px; }
+  .tval { font-family: var(--mono); font-size: 0.7rem; }
+  .sparkline-wrap { width: 200px; }
+  .sparkline-wrap svg { display: block; }
+  .tension-label { font-family: var(--mono); font-size: 0.62rem; color: var(--text-mute); text-align: right; margin-top: 0.2rem; }
   @media (max-width: 720px) {
     .track-card { grid-template-columns: 1fr; }
     .track-right { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
@@ -384,100 +119,38 @@
     .sparkline-wrap svg { width: 100%; }
   }
 
-  /* ── What's next ── */
-  .next-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-  }
+  /* next */
+  .next-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 1rem; }
   @media (max-width: 600px) { .next-grid { grid-template-columns: 1fr; } }
-  .next-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.3rem 1.5rem;
-  }
-  .next-card h3 {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .next-card h3 .icon {
-    display: inline-block;
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--teal);
-    flex-shrink: 0;
-  }
-  .next-card p {
-    font-size: 0.82rem;
-    color: var(--text-dim);
-    line-height: 1.65;
-  }
+  .next-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.3rem 1.5rem; }
+  .next-card h3 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+  .next-card h3::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--teal); flex-shrink: 0; }
+  .next-card p { font-size: 0.82rem; color: var(--text-dim); line-height: 1.65; }
 
-  /* ── Footer ── */
-  footer {
-    border-top: 1px solid var(--border);
-    padding: 2rem 0;
-    font-size: 0.78rem;
-    color: var(--text-mute);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-  footer a { color: var(--text-mute); }
-  footer a:hover { color: var(--teal); }
-  footer .foot-mono { font-family: var(--mono); }
-
-  /* ── Tension arc meter ── */
-  .tension-meter {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-  .tension-track {
-    width: 48px;
-    height: 4px;
-    background: var(--bg-raised);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .tension-fill {
-    height: 100%;
-    border-radius: 2px;
-    background: var(--teal);
-  }
+  footer { border-top: 1px solid var(--border); padding: 2rem 0; }
+  .foot-inner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; font-size: 0.78rem; color: var(--text-mute); }
+  .foot-mono { font-family: var(--mono); font-size: 0.72rem; }
 </style>
 </head>
 <body>
 
 <nav>
-  <div class="nav-brand">analyze_synths</div>
+  <span class="nav-brand">analyze_synths</span>
   <ul>
     <li><a href="#story">story</a></li>
     <li><a href="#benchmarks">benchmarks</a></li>
     <li><a href="#library">library</a></li>
     <li><a href="#next">next</a></li>
-    <li><a href="https://github.com/singletary/analyze_synths">github</a></li>
+    <li><a href="https://github.com/tsingletaryTT/analyze_synths">github</a></li>
   </ul>
 </nav>
 
-<!-- ─────────────────────────────── HERO ─────────────────────────────── -->
+<!-- hero -->
 <section id="hero">
 <div class="container">
-  <div class="hero-eyebrow">Tenstorrent Blackhole &nbsp;/&nbsp; JAX PJRT &nbsp;/&nbsp; temporal narrative analysis</div>
+  <p class="hero-eyebrow">Tenstorrent Blackhole &nbsp;/&nbsp; JAX PJRT &nbsp;/&nbsp; temporal narrative analysis</p>
   <h1 class="hero-title">Teaching hardware<br>to <span>hear music</span></h1>
-  <p class="hero-desc">
-    A composer's toolkit for understanding a personal synthesizer library.
-    60 minutes of ambient pieces analyzed in under a second.
-    Every track gets sections, tension arcs, mood vocabulary, and prose.
-  </p>
+  <p class="hero-desc">A composer&rsquo;s toolkit for understanding a personal synthesizer library. 60&thinsp;minutes of ambient pieces analyzed in under a second. Every track gets sections, tension arcs, mood vocabulary, and prose.</p>
   <div class="hero-stats">
     <div>
       <div class="hero-stat-value">3,931x</div>
@@ -485,8 +158,8 @@
     </div>
     <div class="hero-divider"></div>
     <div>
-      <div class="hero-stat-value">0.9 s</div>
-      <div class="hero-stat-label">60 min of audio</div>
+      <div class="hero-stat-value">0.9&thinsp;s</div>
+      <div class="hero-stat-label">60&thinsp;min of audio</div>
     </div>
     <div class="hero-divider"></div>
     <div>
@@ -496,298 +169,557 @@
     <div class="hero-divider"></div>
     <div>
       <div class="hero-stat-value">160</div>
-      <div class="hero-stat-label">total sections found</div>
+      <div class="hero-stat-label">sections found</div>
     </div>
   </div>
 </div>
 </section>
 
-<!-- ─────────────────────────────── STORY ─────────────────────────────── -->
+<!-- story -->
 <section id="story">
 <div class="container">
   <h2>The story</h2>
   <p class="section-sub">From a library management problem to Blackhole silicon</p>
-
   <div class="story-grid">
     <div class="story-block">
       <h3>The problem</h3>
-      <p>A growing library of synthesizer pieces — long-form ambient tracks, generative drones, evolving textures — with no good way to understand what was in it. Standard tools give BPM and key. Not useful when the track has no tempo and the key is ambiguous.</p>
-      <p>So the first goal was a creative vocabulary: <em>spacey, crystalline, droning, organic, oozy</em>. Descriptors that mean something to a synthesizer composer.</p>
+      <p>A growing library of synthesizer pieces &mdash; long-form ambient tracks, generative drones, evolving textures &mdash; with no good way to understand what was in it. Standard tools give BPM and key. Not useful when the track has no tempo and the key is ambiguous.</p>
+      <p>The goal was a creative vocabulary: <em>spacey, crystalline, droning, organic, oozy</em>. Descriptors that mean something to a synthesizer composer.</p>
     </div>
-
     <div class="story-block">
-      <h3>v1 — Feature extraction</h3>
-      <p>A librosa-based pipeline extracting 80+ features per track mapped through empirically-tuned thresholds to 176 descriptors: 9 core moods, 8 extended moods, 100 advanced moods, 59 character tags. K-means clustering, phase detection, and sequence recommendation on top.</p>
-      <p>It worked. The results felt right. The problem was speed — long files and dense spectrogram matrices.</p>
+      <h3>v1 &mdash; Feature extraction</h3>
+      <p>A librosa-based pipeline extracting 80+ features per track mapped through empirically-tuned thresholds to 176 descriptors: 9 core moods, 8 extended, 100 advanced, 59 character tags. K-means clustering, phase detection, and sequence recommendation on top.</p>
+      <p>It worked. The results felt right. The problem was speed on long files.</p>
     </div>
-
     <div class="story-block">
       <h3>The insight</h3>
       <p>STFT is just three matrix multiplications. Given pre-computed static bases:</p>
       <p><code>cos_proj = frame @ cos_basis</code><br>
          <code>sin_proj = frame @ sin_basis</code><br>
-         <code>mag = sqrt(cos² + sin² + ε)</code><br>
+         <code>mag = sqrt(cos&sup2; + sin&sup2; + &epsilon;)</code><br>
          <code>mel = mag @ mel_filter</code></p>
-      <p>Float32, precomputed matrices, batch frames — exactly what Tensix cores are for.</p>
+      <p>Float32, precomputed matrices, batch frames &mdash; exactly what Tensix cores are for.</p>
     </div>
-
     <div class="story-block">
       <h3>TT-Lang kernel</h3>
-      <p>The first target was the TT-Lang simulator: a Python DSL for Tensix dataflow kernels. Two <code>@ttl.operation</code> kernels (a DataflowBuffer can't be simultaneously written and read in one pass). All tile dimensions must be multiples of 32 — <code>n_freqs=1025</code> padded to 1056.</p>
+      <p>First target: TT-Lang simulator &mdash; a Python DSL for Tensix dataflow kernels. Two <code>@ttl.operation</code> kernels (a DataflowBuffer can&rsquo;t be simultaneously written and read in one pass). All tile dimensions must be multiples of 32; <code>n_freqs=1025</code> padded to 1056.</p>
       <p>Loop ordering between reader and compute threads must be identical or tiles arrive out of sequence and produce silently wrong results.</p>
     </div>
-
     <div class="story-block">
       <h3>Hardware dispatch</h3>
-      <p>Four P300C Blackhole chips in a P150X4 mesh. Getting JAX to see them took finding the right PJRT plugin: <code>/home/ttuser/tt-xla/python_package/pjrt_plugin_tt/pjrt_plugin_tt.so</code> with a matching site-packages tree. The tt-metal and tt-xla-venv paths both failed — wrong num_chips, undefined symbols.</p>
-      <p>Once found: <code>jax.config.update("jax_platform_name", "tt")</code> and <code>@jax.jit</code> compiles the four-matmul STFT graph once, reuses it for every chunk.</p>
+      <p>Four P300C Blackhole chips in a P150X4 mesh. Getting JAX to see them meant finding the right PJRT plugin binary. The tt-metal and tt-xla-venv paths both failed &mdash; wrong chip count, undefined symbols. The working path: <code>pjrt_plugin_tt.so</code> from tt-xla with the p300c-xla-test site-packages tree.</p>
+      <p><code>@jax.jit</code> compiles the four-matmul STFT graph once and reuses it for every chunk.</p>
     </div>
-
     <div class="story-block">
       <h3>Temporal narrative</h3>
-      <p>Fast STFT opened a door. With 60 minutes processed in under a second, richer temporal analysis became practical: tension trajectories (2-second windows), change-point section detection, prose generation, and a cross-piece similarity graph (structure 60% + texture 40%) linking structurally related tracks in the library.</p>
+      <p>Fast STFT opened a door. With 60&thinsp;min processed in under a second, richer temporal analysis became practical: tension trajectories in 2-second windows, change-point section detection (7 section types), prose generation, and a cross-piece similarity graph linking structurally related tracks.</p>
     </div>
   </div>
 </div>
 </section>
 
-<!-- ─────────────────────────────── BENCHMARKS ─────────────────────────────── -->
+<!-- benchmarks -->
 <section id="benchmarks">
 <div class="container">
   <h2>Benchmarks</h2>
-  <p class="section-sub">8 synthesizer pieces, 59.8 min total &mdash; TT Blackhole, JAX PJRT, JIT warmed up</p>
-
+  <p class="section-sub">8 synthesizer pieces, 59.8&thinsp;min total &mdash; TT Blackhole P150X4, JAX PJRT, JIT warmed up</p>
   <table class="bench-table">
     <thead>
       <tr>
-        <th>file</th>
-        <th>duration</th>
-        <th>hw time</th>
-        <th>real-time factor</th>
+        <th>file</th><th>duration</th><th>hw time</th><th>real-time factor</th>
       </tr>
     </thead>
-    <tbody id="bench-tbody"></tbody>
-  </table>
+    <tbody>
 
-  <div class="bench-comparison">
-    <div class="bench-cmp-card highlight">
-      <div class="bench-cmp-label">TT Blackhole (hardware)</div>
-      <div class="bench-cmp-value">3,931x</div>
-      <div class="bench-cmp-sub">0.9 s total &nbsp;/&nbsp; 60 min audio</div>
+      <tr>
+        <td class="filename">2020 cricketeering</td>
+        <td class="hw-time tdim">6:18</td>
+        <td class="hw-time">0.10 s</td>
+        <td><div class="rtf-bar-row"><span class="rtf">3,693x</span>
+          <div class="rtf-bar" style="width:73px"></div></div></td>
+      </tr>
+      <tr>
+        <td class="filename">2021 12 20 chiminy biscuits</td>
+        <td class="hw-time tdim">5:28</td>
+        <td class="hw-time">0.08 s</td>
+        <td><div class="rtf-bar-row"><span class="rtf">4,013x</span>
+          <div class="rtf-bar" style="width:79px"></div></div></td>
+      </tr>
+      <tr>
+        <td class="filename">2021 melody partially resolute tetrax</td>
+        <td class="hw-time tdim">2:32</td>
+        <td class="hw-time">0.04 s</td>
+        <td><div class="rtf-bar-row"><span class="rtf">3,497x</span>
+          <div class="rtf-bar" style="width:69px"></div></div></td>
+      </tr>
+      <tr>
+        <td class="filename">2022 06 05 negative 60</td>
+        <td class="hw-time tdim">4:12</td>
+        <td class="hw-time">0.06 s</td>
+        <td><div class="rtf-bar-row"><span class="rtf">3,880x</span>
+          <div class="rtf-bar" style="width:76px"></div></div></td>
+      </tr>
+      <tr>
+        <td class="filename">2022 09 17 caving in</td>
+        <td class="hw-time tdim">9:28</td>
+        <td class="hw-time">0.14 s</td>
+        <td><div class="rtf-bar-row"><span class="rtf">4,074x</span>
+          <div class="rtf-bar" style="width:80px"></div></div></td>
+      </tr>
+      <tr>
+        <td class="filename">2022-09-25 while madeline sleeps</td>
+        <td class="hw-time tdim">10:42</td>
+        <td class="hw-time">0.16 s</td>
+        <td><div class="rtf-bar-row"><span class="rtf">3,997x</span>
+          <div class="rtf-bar" style="width:78px"></div></div></td>
+      </tr>
+      <tr>
+        <td class="filename">2022-12-14 a quatrax cosmos memory</td>
+        <td class="hw-time tdim">11:32</td>
+        <td class="hw-time">0.18 s</td>
+        <td><div class="rtf-bar-row"><span class="rtf">3,941x</span>
+          <div class="rtf-bar" style="width:77px"></div></div></td>
+      </tr>
+      <tr>
+        <td class="filename">2023 04 13 centers</td>
+        <td class="hw-time tdim">9:36</td>
+        <td class="hw-time">0.14 s</td>
+        <td><div class="rtf-bar-row"><span class="rtf">3,983x</span>
+          <div class="rtf-bar" style="width:78px"></div></div></td>
+      </tr>
+      <tr class="bench-total">
+        <td>total (8 files)</td>
+        <td>59:48</td>
+        <td>0.9&thinsp;s</td>
+        <td>3,931x avg</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="bench-cmp">
+    <div class="cmp-card hl">
+      <div class="cmp-label">TT Blackhole (hardware)</div>
+      <div class="cmp-value">3,931x</div>
+      <div class="cmp-sub">0.9&thinsp;s total &nbsp;/&nbsp; 60&thinsp;min audio</div>
     </div>
-    <div class="bench-cmp-card">
-      <div class="bench-cmp-label">NumPy baseline</div>
-      <div class="bench-cmp-value">1,256x</div>
-      <div class="bench-cmp-sub">2.9 s total &nbsp;/&nbsp; 60 min audio</div>
+    <div class="cmp-card">
+      <div class="cmp-label">NumPy baseline</div>
+      <div class="cmp-value">1,256x</div>
+      <div class="cmp-sub">2.9&thinsp;s total &nbsp;/&nbsp; 60&thinsp;min audio</div>
     </div>
-    <div class="bench-cmp-card">
-      <div class="bench-cmp-label">hardware speedup</div>
-      <div class="bench-cmp-value">3.2x</div>
-      <div class="bench-cmp-sub">float32 matmul over K=2048 accumulation</div>
+    <div class="cmp-card">
+      <div class="cmp-label">hardware speedup</div>
+      <div class="cmp-value">3.2x</div>
+      <div class="cmp-sub">float32 matmul over K=2048 accumulation</div>
     </div>
   </div>
 </div>
 </section>
 
-<!-- ─────────────────────────────── LIBRARY ─────────────────────────────── -->
+<!-- library -->
 <section id="library">
 <div class="container">
   <h2>Library</h2>
-  <p class="section-sub">Results from the current 8-piece pool &mdash; tension trajectories, section breakdowns, similarity graph</p>
-  <div class="library-grid" id="library-grid"></div>
+  <p class="section-sub">8-piece pool &mdash; tension trajectories, section breakdowns, similarity graph. Similar chips link to their targets.</p>
+  <div class="library-grid">
+
+    <div class="track-card" id="2020-cricketeering">
+      <div class="track-left">
+        <div class="track-header">
+          <span class="track-title">2020 cricketeering</span>
+          <span class="track-meta">6:18</span>
+        </div>
+        <p class="track-narrative">A sustained plateau settles at 0:00 — oozy. The mood holds steadily through 0:57: oozy. A sustained plateau settles at 1:13 — oozy. The mood holds gradually through 1:54: oozy. A bit crushed, organic texture character emerges here. Around 2:04, the texture shifts — oozy as…</p>
+        <div class="track-tags"><span class="tag" style="border-color:#607D8B;color:#90AAB8">oozy ×14</span>
 </div>
-</section>
+        <div class="track-similar">
+          <span class="similar-label">structurally similar &rarr;</span>
+          <a class="similar-chip" href="#2021-melody-partially-resolute-tetrax">2021 melody partially resolute tetrax</a>
+<a class="similar-chip" href="#2022-09-17-caving-in">2022 09 17 caving in</a>
+<a class="similar-chip" href="#2021-12-20-chiminy-biscuits">2021 12 20 chiminy biscuits</a>
 
-<!-- ─────────────────────────────── NEXT ─────────────────────────────── -->
-<section id="next">
-<div class="container">
-  <h2>What's next</h2>
-  <p class="section-sub">The STFT bottleneck moved. Now everything else shows up.</p>
+        </div>
+      </div>
+      <div class="track-right">
+        <div class="track-stats">
+          <span><span class="sections-count">14</span> sections</span>
+          <div class="tension-meter">
+            <span class="tlabel">tension</span>
+            <div class="tension-track">
+              <div class="tension-fill" style="width:30%;background:#607D8B"></div>
+            </div>
+            <span class="tval" style="color:#607D8B">0.30</span>
+          </div>
+        </div>
+        <div class="sparkline-wrap">
+          <svg width="200" height="40" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="sg-2020-cricketeering" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4FD1C5" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#4FD1C5" stop-opacity="0.15"/>
+            </linearGradient>
+          </defs>
+          <path d="M 0.0,33.1 L 3.2,23.2 L 6.5,29.9 L 9.7,28.5 L 12.9,29.1 L 16.1,26.8 L 19.4,31.3 L 22.6,30.0 L 25.8,30.7 L 29.0,26.0 L 32.3,26.5 L 35.5,24.3 L 38.7,29.2 L 41.9,32.5 L 45.2,28.4 L 48.4,18.8 L 51.6,25.2 L 54.8,22.5 L 58.1,20.9 L 61.3,32.8 L 64.5,35.5 L 67.7,26.5 L 71.0,29.2 L 74.2,26.6 L 77.4,28.1 L 80.6,25.3 L 83.9,25.5 L 87.1,30.0 L 90.3,30.9 L 93.6,28.7 L 96.8,30.8 L 100.0,32.5 L 103.2,24.4 L 106.5,15.1 L 109.7,30.2 L 112.9,32.1 L 116.1,27.4 L 119.4,30.5 L 122.6,31.1 L 125.8,27.7 L 129.0,31.3 L 132.3,30.7 L 135.5,29.3 L 138.7,33.8 L 141.9,28.4 L 145.2,30.8 L 148.4,30.3 L 151.6,30.8 L 154.8,25.1 L 158.1,30.6 L 161.3,16.4 L 164.5,34.1 L 167.7,27.7 L 171.0,23.0 L 174.2,33.4 L 177.4,30.8 L 180.6,30.0 L 183.9,27.2 L 187.1,20.8 L 190.3,28.2 L 193.5,25.5 L 196.8,30.4 L 200.0,30.9" fill="none" stroke="#4FD1C5" stroke-width="1.5" stroke-linejoin="round" opacity="0.7"/>
+        </svg>
+          <div class="tension-label">tension arc &rarr; time</div>
+        </div>
+      </div>
+    </div>
+    <div class="track-card" id="2021-12-20-chiminy-biscuits">
+      <div class="track-left">
+        <div class="track-header">
+          <span class="track-title">2021 12 20 chiminy biscuits</span>
+          <span class="track-meta">5:28</span>
+        </div>
+        <p class="track-narrative">A sustained plateau settles at 0:00 — oozy. The mood holds steadily through 0:21: organic. A string machine, subtractive synth character emerges here. A sustained plateau settles at 0:23 — oozy. A chorused, flanged character emerges here. The mood holds steadily through 1:21:…</p>
+        <div class="track-tags"><span class="tag" style="border-color:#607D8B;color:#90AAB8">oozy ×10</span>
+<span class="tag" style="border-color:#27AE60;color:#5ecc8a">organic</span>
+</div>
+        <div class="track-similar">
+          <span class="similar-label">structurally similar &rarr;</span>
+          <a class="similar-chip" href="#2022-12-14-a-quatrax-cosmos-memory">2022-12-14 a quatrax cosmos memory</a>
+<a class="similar-chip" href="#2021-melody-partially-resolute-tetrax">2021 melody partially resolute tetrax</a>
+<a class="similar-chip" href="#2020-cricketeering">2020 cricketeering</a>
 
-  <div class="next-grid">
-    <div class="next-card">
-      <h3><span class="icon"></span> Multi-chip parallelism</h3>
-      <p>The P150X4 mesh has 4 Blackhole chips. Current dispatch uses whatever chip JAX picks. Explicit device placement could run 4 chunks simultaneously — another 4x on top of per-chip speed, pushing STFT for 60 min of audio under 0.25 s.</p>
+        </div>
+      </div>
+      <div class="track-right">
+        <div class="track-stats">
+          <span><span class="sections-count">11</span> sections</span>
+          <div class="tension-meter">
+            <span class="tlabel">tension</span>
+            <div class="tension-track">
+              <div class="tension-fill" style="width:38%;background:#4FD1C5"></div>
+            </div>
+            <span class="tval" style="color:#4FD1C5">0.38</span>
+          </div>
+        </div>
+        <div class="sparkline-wrap">
+          <svg width="200" height="40" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="sg-2021-12-20-chiminy-biscuits" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4FD1C5" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#4FD1C5" stop-opacity="0.15"/>
+            </linearGradient>
+          </defs>
+          <path d="M 0.0,27.4 L 3.8,28.8 L 7.6,25.2 L 11.3,32.8 L 15.1,28.1 L 18.9,24.9 L 22.6,28.3 L 26.4,28.6 L 30.2,26.4 L 34.0,23.5 L 37.7,20.5 L 41.5,24.2 L 45.3,22.0 L 49.1,20.4 L 52.8,21.7 L 56.6,23.4 L 60.4,23.0 L 64.2,23.3 L 67.9,26.9 L 71.7,24.4 L 75.5,16.2 L 79.2,20.0 L 83.0,21.6 L 86.8,28.8 L 90.6,18.5 L 94.3,36.4 L 98.1,25.4 L 101.9,26.3 L 105.7,20.1 L 109.4,22.1 L 113.2,34.9 L 117.0,23.4 L 120.8,21.0 L 124.5,32.7 L 128.3,26.4 L 132.1,23.3 L 135.9,22.3 L 139.6,22.2 L 143.4,23.9 L 147.2,22.0 L 150.9,31.2 L 154.7,22.0 L 158.5,32.8 L 162.3,25.6 L 166.0,22.9 L 169.8,27.1 L 173.6,23.0 L 177.4,12.3 L 181.1,14.7 L 184.9,23.0 L 188.7,32.1 L 192.5,34.8 L 196.2,38.2 L 200.0,38.9" fill="none" stroke="#4FD1C5" stroke-width="1.5" stroke-linejoin="round" opacity="0.7"/>
+        </svg>
+          <div class="tension-label">tension arc &rarr; time</div>
+        </div>
+      </div>
     </div>
-    <div class="next-card">
-      <h3><span class="icon"></span> Trajectory on hardware</h3>
-      <p>TrajectoryAnalyzer still runs on CPU. The per-window tension computations (roughness, ZCR, chroma spread) share the same matmul structure as STFT — a JIT-compiled trajectory kernel would make the full pipeline hardware-accelerated end to end.</p>
+    <div class="track-card" id="2021-melody-partially-resolute-tetrax">
+      <div class="track-left">
+        <div class="track-header">
+          <span class="track-title">2021 melody partially resolute tetrax</span>
+          <span class="track-meta">2:32</span>
+        </div>
+        <p class="track-narrative">A sustained plateau settles at 0:00 — oozy. The mood holds steadily through 0:51: oozy. A sustained plateau settles at 1:05 — oozy. A bit crushed, mellotron character emerges here. The mood holds steadily through 1:07: organic. A bass synth character emerges here.</p>
+        <div class="track-tags"><span class="tag" style="border-color:#607D8B;color:#90AAB8">oozy ×6</span>
+<span class="tag" style="border-color:#27AE60;color:#5ecc8a">organic</span>
+</div>
+        <div class="track-similar">
+          <span class="similar-label">structurally similar &rarr;</span>
+          <a class="similar-chip" href="#2020-cricketeering">2020 cricketeering</a>
+<a class="similar-chip" href="#2022-09-17-caving-in">2022 09 17 caving in</a>
+<a class="similar-chip" href="#2021-12-20-chiminy-biscuits">2021 12 20 chiminy biscuits</a>
+
+        </div>
+      </div>
+      <div class="track-right">
+        <div class="track-stats">
+          <span><span class="sections-count">7</span> sections</span>
+          <div class="tension-meter">
+            <span class="tlabel">tension</span>
+            <div class="tension-track">
+              <div class="tension-fill" style="width:29%;background:#607D8B"></div>
+            </div>
+            <span class="tval" style="color:#607D8B">0.29</span>
+          </div>
+        </div>
+        <div class="sparkline-wrap">
+          <svg width="200" height="40" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="sg-2021-melody-partially-resolute-tetrax" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4FD1C5" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#4FD1C5" stop-opacity="0.15"/>
+            </linearGradient>
+          </defs>
+          <path d="M 0.0,24.7 L 8.3,30.4 L 16.7,28.2 L 25.0,28.7 L 33.3,28.9 L 41.7,31.6 L 50.0,32.5 L 58.3,29.2 L 66.7,33.2 L 75.0,24.7 L 83.3,31.1 L 91.7,20.6 L 100.0,32.1 L 108.3,27.4 L 116.7,11.0 L 125.0,27.0 L 133.3,28.3 L 141.7,28.8 L 150.0,31.6 L 158.3,31.6 L 166.7,28.1 L 175.0,33.4 L 183.3,32.6 L 191.7,27.9 L 200.0,28.5" fill="none" stroke="#4FD1C5" stroke-width="1.5" stroke-linejoin="round" opacity="0.7"/>
+        </svg>
+          <div class="tension-label">tension arc &rarr; time</div>
+        </div>
+      </div>
     </div>
-    <div class="next-card">
-      <h3><span class="icon"></span> Real-time streaming</h3>
-      <p>The chunk-streaming architecture was designed for this. With hardware STFT and fast trajectory, latency per 30-second chunk could drop below 10 ms — enabling live analysis of audio as it's being performed or recorded.</p>
+    <div class="track-card" id="2022-06-05-negative-60">
+      <div class="track-left">
+        <div class="track-header">
+          <span class="track-title">2022 06 05 negative 60</span>
+          <span class="track-meta">4:12</span>
+        </div>
+        <p class="track-narrative">2022 06 05 negative 60 begins with oozy, setting a valley tone. The mood holds softly through 0:05: oozy. A acoustic instrument, distorted character emerges here. Around 0:07, the texture shifts — oozy as brightness rises. A arp synth, brass character emerges here. The mood…</p>
+        <div class="track-tags"><span class="tag" style="border-color:#607D8B;color:#90AAB8">oozy ×5</span>
+<span class="tag" style="border-color:#27AE60;color:#5ecc8a">organic ×3</span>
+<span class="tag" style="border-color:#4FD1C5;color:#4FD1C5">synthetic ×2</span>
+<span class="tag" style="border-color:#9B8FD4;color:#9B8FD4">spacey</span>
+</div>
+        <div class="track-similar">
+          <span class="similar-label">structurally similar &rarr;</span>
+          <a class="similar-chip" href="#2022-09-17-caving-in">2022 09 17 caving in</a>
+<a class="similar-chip" href="#2022-09-25-while-madeline-sleeps">2022-09-25 while madeline sleeps</a>
+<a class="similar-chip" href="#2023-04-13-centers">2023 04 13 centers</a>
+
+        </div>
+      </div>
+      <div class="track-right">
+        <div class="track-stats">
+          <span><span class="sections-count">11</span> sections</span>
+          <div class="tension-meter">
+            <span class="tlabel">tension</span>
+            <div class="tension-track">
+              <div class="tension-fill" style="width:24%;background:#607D8B"></div>
+            </div>
+            <span class="tval" style="color:#607D8B">0.24</span>
+          </div>
+        </div>
+        <div class="sparkline-wrap">
+          <svg width="200" height="40" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="sg-2022-06-05-negative-60" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4FD1C5" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#4FD1C5" stop-opacity="0.15"/>
+            </linearGradient>
+          </defs>
+          <path d="M 0.0,30.0 L 4.9,36.9 L 9.8,31.2 L 14.6,31.4 L 19.5,36.2 L 24.4,33.6 L 29.3,34.4 L 34.2,35.2 L 39.0,34.4 L 43.9,33.5 L 48.8,32.0 L 53.7,33.9 L 58.5,31.2 L 63.4,31.4 L 68.3,32.8 L 73.2,28.9 L 78.1,29.6 L 82.9,30.5 L 87.8,27.3 L 92.7,27.0 L 97.6,23.1 L 102.4,23.6 L 107.3,21.7 L 112.2,19.4 L 117.1,19.9 L 121.9,19.0 L 126.8,15.9 L 131.7,15.0 L 136.6,15.1 L 141.5,21.7 L 146.3,22.8 L 151.2,22.0 L 156.1,21.1 L 161.0,21.5 L 165.9,22.0 L 170.7,23.9 L 175.6,26.5 L 180.5,26.0 L 185.4,28.9 L 190.2,32.3 L 195.1,28.7 L 200.0,32.0" fill="none" stroke="#4FD1C5" stroke-width="1.5" stroke-linejoin="round" opacity="0.7"/>
+        </svg>
+          <div class="tension-label">tension arc &rarr; time</div>
+        </div>
+      </div>
     </div>
-    <div class="next-card">
-      <h3><span class="icon"></span> Grow the pool</h3>
-      <p>The library has 8 pieces right now. With more music, the similarity graph becomes genuinely informative and the clustering finds real structure. The descriptor thresholds could also learn from a larger annotated set.</p>
+    <div class="track-card" id="2022-09-17-caving-in">
+      <div class="track-left">
+        <div class="track-header">
+          <span class="track-title">2022 09 17 caving in</span>
+          <span class="track-meta">9:28</span>
+        </div>
+        <p class="track-narrative">2022 09 17 caving in begins with crystalline, setting a valley tone. The mood holds softly through 0:33: chaos. A am synth, bass synth character emerges here. A sustained plateau settles at 0:35 — crystalline. A choir, chorused character emerges here. The mood holds softly…</p>
+        <div class="track-tags"><span class="tag" style="border-color:#4FD1C5;color:#81E6D9">crystalline ×13</span>
+<span class="tag" style="border-color:#27AE60;color:#5ecc8a">organic ×4</span>
+<span class="tag" style="border-color:#EC96B8;color:#EC96B8">chaos ×2</span>
+<span class="tag" style="border-color:#B0C4DE;color:#B0C4DE">pensive ×2</span>
+</div>
+        <div class="track-similar">
+          <span class="similar-label">structurally similar &rarr;</span>
+          <a class="similar-chip" href="#2021-melody-partially-resolute-tetrax">2021 melody partially resolute tetrax</a>
+<a class="similar-chip" href="#2020-cricketeering">2020 cricketeering</a>
+<a class="similar-chip" href="#2021-12-20-chiminy-biscuits">2021 12 20 chiminy biscuits</a>
+
+        </div>
+      </div>
+      <div class="track-right">
+        <div class="track-stats">
+          <span><span class="sections-count">25</span> sections</span>
+          <div class="tension-meter">
+            <span class="tlabel">tension</span>
+            <div class="tension-track">
+              <div class="tension-fill" style="width:24%;background:#607D8B"></div>
+            </div>
+            <span class="tval" style="color:#607D8B">0.24</span>
+          </div>
+        </div>
+        <div class="sparkline-wrap">
+          <svg width="200" height="40" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="sg-2022-09-17-caving-in" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4FD1C5" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#4FD1C5" stop-opacity="0.15"/>
+            </linearGradient>
+          </defs>
+          <path d="M 0.0,38.0 L 2.2,35.5 L 4.3,36.6 L 6.5,36.4 L 8.6,31.6 L 10.8,36.8 L 12.9,31.8 L 15.1,31.5 L 17.2,35.8 L 19.4,34.7 L 21.5,34.9 L 23.7,36.1 L 25.8,34.6 L 28.0,33.6 L 30.1,33.9 L 32.3,31.8 L 34.4,29.8 L 36.6,31.9 L 38.7,27.7 L 40.9,29.5 L 43.0,27.9 L 45.2,29.0 L 47.3,29.4 L 49.5,28.3 L 51.6,28.2 L 53.8,29.7 L 55.9,29.9 L 58.1,28.9 L 60.2,31.2 L 62.4,31.9 L 64.5,30.5 L 66.7,30.0 L 68.8,30.9 L 71.0,29.3 L 73.1,27.7 L 75.3,29.7 L 77.4,30.2 L 79.6,32.3 L 81.7,34.2 L 83.9,32.6 L 86.0,33.7 L 88.2,34.8 L 90.3,35.2 L 92.5,33.0 L 94.6,33.4 L 96.8,34.3 L 98.9,32.1 L 101.1,32.1 L 103.2,30.5 L 105.4,28.5 L 107.5,31.3 L 109.7,30.5 L 111.8,27.5 L 114.0,29.6 L 116.1,35.9 L 118.3,34.6 L 120.4,35.0 L 122.6,31.7 L 124.7,26.7 L 126.9,33.3 L 129.0,31.6 L 131.2,29.6 L 133.3,32.5 L 135.5,23.8 L 137.6,23.4 L 139.8,17.5 L 141.9,21.3 L 144.1,31.0 L 146.2,28.9 L 148.4,24.4 L 150.5,34.4 L 152.7,23.8 L 154.8,17.4 L 157.0,23.2 L 159.1,22.1 L 161.3,16.9 L 163.4,19.3 L 165.6,34.1 L 167.7,31.8 L 169.9,33.8 L 172.0,35.9 L 174.2,33.5 L 176.3,27.4 L 178.5,35.6 L 180.6,26.4 L 182.8,26.0 L 184.9,29.7 L 187.1,30.9 L 189.2,28.8 L 191.4,34.4 L 193.5,33.4 L 195.7,27.5 L 197.8,34.2 L 200.0,34.1" fill="none" stroke="#4FD1C5" stroke-width="1.5" stroke-linejoin="round" opacity="0.7"/>
+        </svg>
+          <div class="tension-label">tension arc &rarr; time</div>
+        </div>
+      </div>
     </div>
-    <div class="next-card">
-      <h3><span class="icon"></span> Similarity-driven sequencing</h3>
-      <p>The CrossPieceSimilarity graph gives structural neighbors. Feeding it into the SequenceRecommender — so transitions favor structurally complementary pieces rather than only spectrally similar ones — would produce more interesting playlists.</p>
+    <div class="track-card" id="2022-09-25-while-madeline-sleeps">
+      <div class="track-left">
+        <div class="track-header">
+          <span class="track-title">2022-09-25 while madeline sleeps</span>
+          <span class="track-meta">10:42</span>
+        </div>
+        <p class="track-narrative">2022-09-25 while madeline sleeps begins with oozy, setting a valley tone. The mood holds softly through 0:59: organic. A sustained plateau settles at 1:01 — exuberant. The mood holds gradually through 2:00: organic. A sustained plateau settles at 2:08 — organic. A woodwind…</p>
+        <div class="track-tags"><span class="tag" style="border-color:#27AE60;color:#5ecc8a">organic ×7</span>
+<span class="tag" style="border-color:#F4C471;color:#F4C471">exuberant ×7</span>
+<span class="tag" style="border-color:#FF6B6B;color:#FF6B6B">tense ×7</span>
+<span class="tag" style="border-color:#4FD1C5;color:#4FD1C5">synthetic ×3</span>
+</div>
+        <div class="track-similar">
+          <span class="similar-label">structurally similar &rarr;</span>
+          <a class="similar-chip" href="#2022-12-14-a-quatrax-cosmos-memory">2022-12-14 a quatrax cosmos memory</a>
+<a class="similar-chip" href="#2023-04-13-centers">2023 04 13 centers</a>
+<a class="similar-chip" href="#2021-12-20-chiminy-biscuits">2021 12 20 chiminy biscuits</a>
+
+        </div>
+      </div>
+      <div class="track-right">
+        <div class="track-stats">
+          <span><span class="sections-count">29</span> sections</span>
+          <div class="tension-meter">
+            <span class="tlabel">tension</span>
+            <div class="tension-track">
+              <div class="tension-fill" style="width:36%;background:#4FD1C5"></div>
+            </div>
+            <span class="tval" style="color:#4FD1C5">0.36</span>
+          </div>
+        </div>
+        <div class="sparkline-wrap">
+          <svg width="200" height="40" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="sg-2022-09-25-while-madeline-sleeps" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4FD1C5" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#4FD1C5" stop-opacity="0.15"/>
+            </linearGradient>
+          </defs>
+          <path d="M 0.0,32.0 L 1.9,36.8 L 3.8,38.1 L 5.7,34.3 L 7.6,33.2 L 9.5,33.4 L 11.4,36.2 L 13.3,35.2 L 15.2,33.4 L 17.1,33.2 L 19.0,35.5 L 21.0,31.6 L 22.9,31.3 L 24.8,29.9 L 26.7,25.9 L 28.6,27.3 L 30.5,28.0 L 32.4,26.0 L 34.3,28.9 L 36.2,27.8 L 38.1,32.5 L 40.0,28.0 L 41.9,32.8 L 43.8,32.9 L 45.7,30.3 L 47.6,28.7 L 49.5,32.6 L 51.4,30.8 L 53.3,28.8 L 55.2,27.1 L 57.1,23.8 L 59.1,26.9 L 61.0,23.7 L 62.9,24.2 L 64.8,18.4 L 66.7,26.8 L 68.6,28.4 L 70.5,25.7 L 72.4,27.5 L 74.3,29.0 L 76.2,25.1 L 78.1,28.0 L 80.0,27.5 L 81.9,27.9 L 83.8,27.0 L 85.7,24.1 L 87.6,24.1 L 89.5,20.4 L 91.4,19.0 L 93.3,20.7 L 95.2,17.0 L 97.1,19.2 L 99.0,22.8 L 101.0,20.2 L 102.9,19.1 L 104.8,22.4 L 106.7,18.5 L 108.6,21.7 L 110.5,24.6 L 112.4,22.0 L 114.3,22.2 L 116.2,19.4 L 118.1,17.9 L 120.0,17.4 L 121.9,15.9 L 123.8,20.1 L 125.7,24.3 L 127.6,17.8 L 129.5,22.6 L 131.4,25.3 L 133.3,25.0 L 135.2,24.9 L 137.1,25.4 L 139.0,27.0 L 141.0,25.3 L 142.9,27.9 L 144.8,28.4 L 146.7,29.6 L 148.6,21.0 L 150.5,20.4 L 152.4,21.3 L 154.3,20.0 L 156.2,21.3 L 158.1,22.5 L 160.0,16.9 L 161.9,24.6 L 163.8,24.7 L 165.7,22.2 L 167.6,30.9 L 169.5,27.4 L 171.4,29.4 L 173.3,29.8 L 175.2,30.7 L 177.1,29.3 L 179.0,30.2 L 181.0,32.7 L 182.9,31.2 L 184.8,31.5 L 186.7,31.2 L 188.6,34.2 L 190.5,32.0 L 192.4,34.3 L 194.3,34.5 L 196.2,33.6 L 198.1,32.6 L 200.0,37.4" fill="none" stroke="#4FD1C5" stroke-width="1.5" stroke-linejoin="round" opacity="0.7"/>
+        </svg>
+          <div class="tension-label">tension arc &rarr; time</div>
+        </div>
+      </div>
     </div>
-    <div class="next-card">
-      <h3><span class="icon"></span> Online learning</h3>
-      <p>Mood descriptors and section thresholds are hand-tuned. A track could carry a manual annotation that updates the classifier's priors. Over 100+ annotated pieces, thresholds would reflect the actual composer's perception.</p>
+    <div class="track-card" id="2022-12-14-a-quatrax-cosmos-memory">
+      <div class="track-left">
+        <div class="track-header">
+          <span class="track-title">2022-12-14 a quatrax cosmos memory</span>
+          <span class="track-meta">11:32</span>
+        </div>
+        <p class="track-narrative">A sustained plateau settles at 0:00 — organic. The mood holds steadily through 0:01: organic. A organic texture, phased character emerges here. A sustained plateau settles at 0:03 — organic. The mood holds steadily through 0:41: organic. A bass synth, digital synth character…</p>
+        <div class="track-tags"><span class="tag" style="border-color:#27AE60;color:#5ecc8a">organic ×12</span>
+<span class="tag" style="border-color:#4FD1C5;color:#4FD1C5">synthetic ×8</span>
+<span class="tag" style="border-color:#E6B55E;color:#E6B55E">driving ×6</span>
+<span class="tag" style="border-color:#F4C471;color:#F4C471">exuberant ×3</span>
+</div>
+        <div class="track-similar">
+          <span class="similar-label">structurally similar &rarr;</span>
+          <a class="similar-chip" href="#2022-09-25-while-madeline-sleeps">2022-09-25 while madeline sleeps</a>
+<a class="similar-chip" href="#2021-12-20-chiminy-biscuits">2021 12 20 chiminy biscuits</a>
+<a class="similar-chip" href="#2023-04-13-centers">2023 04 13 centers</a>
+
+        </div>
+      </div>
+      <div class="track-right">
+        <div class="track-stats">
+          <span><span class="sections-count">33</span> sections</span>
+          <div class="tension-meter">
+            <span class="tlabel">tension</span>
+            <div class="tension-track">
+              <div class="tension-fill" style="width:38%;background:#4FD1C5"></div>
+            </div>
+            <span class="tval" style="color:#4FD1C5">0.38</span>
+          </div>
+        </div>
+        <div class="sparkline-wrap">
+          <svg width="200" height="40" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="sg-2022-12-14-a-quatrax-cosmos-memory" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4FD1C5" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#4FD1C5" stop-opacity="0.15"/>
+            </linearGradient>
+          </defs>
+          <path d="M 0.0,27.6 L 1.8,28.2 L 3.5,22.3 L 5.3,25.6 L 7.0,21.7 L 8.8,25.6 L 10.5,24.4 L 12.3,29.2 L 14.0,26.7 L 15.8,29.8 L 17.6,29.7 L 19.3,25.7 L 21.1,25.0 L 22.8,25.2 L 24.6,26.4 L 26.3,29.9 L 28.1,28.9 L 29.8,23.0 L 31.6,25.7 L 33.4,26.1 L 35.1,23.2 L 36.9,21.7 L 38.6,24.3 L 40.4,24.0 L 42.1,23.5 L 43.9,21.3 L 45.6,16.3 L 47.4,18.7 L 49.2,23.0 L 50.9,13.9 L 52.7,23.8 L 54.4,26.2 L 56.2,28.7 L 57.9,29.7 L 59.7,15.5 L 61.4,16.4 L 63.2,21.9 L 65.0,21.5 L 66.7,19.1 L 68.5,30.0 L 70.2,27.1 L 72.0,24.1 L 73.7,23.6 L 75.5,23.1 L 77.2,18.2 L 79.0,21.3 L 80.8,23.4 L 82.5,24.4 L 84.3,22.1 L 86.0,23.8 L 87.8,24.2 L 89.5,26.9 L 91.3,23.0 L 93.0,26.0 L 94.8,26.8 L 96.6,25.8 L 98.3,27.4 L 100.1,27.7 L 101.8,16.5 L 103.6,23.7 L 105.3,27.5 L 107.1,29.2 L 108.8,25.6 L 110.6,29.1 L 112.4,28.1 L 114.1,33.2 L 115.9,27.5 L 117.6,28.9 L 119.4,31.7 L 121.1,29.1 L 122.9,31.3 L 124.6,27.6 L 126.4,28.6 L 128.2,27.8 L 129.9,29.0 L 131.7,29.3 L 133.4,26.9 L 135.2,32.9 L 136.9,26.4 L 138.7,24.6 L 140.4,26.6 L 142.2,17.0 L 144.0,29.6 L 145.7,18.5 L 147.5,13.3 L 149.2,20.5 L 151.0,20.3 L 152.7,23.8 L 154.5,14.4 L 156.3,18.7 L 158.0,24.2 L 159.8,25.5 L 161.5,22.1 L 163.3,20.4 L 165.0,26.4 L 166.8,29.3 L 168.5,13.5 L 170.3,28.1 L 172.1,15.1 L 173.8,19.4 L 175.6,28.4 L 177.3,20.3 L 179.1,23.3 L 180.8,19.2 L 182.6,20.7 L 184.3,29.0 L 186.1,31.0 L 187.9,32.7 L 189.6,28.8 L 191.4,27.3 L 193.1,23.7 L 194.9,31.3 L 196.6,34.8 L 198.4,32.4 L 200.0,32.8" fill="none" stroke="#4FD1C5" stroke-width="1.5" stroke-linejoin="round" opacity="0.7"/>
+        </svg>
+          <div class="tension-label">tension arc &rarr; time</div>
+        </div>
+      </div>
+    </div>
+    <div class="track-card" id="2023-04-13-centers">
+      <div class="track-left">
+        <div class="track-header">
+          <span class="track-title">2023 04 13 centers</span>
+          <span class="track-meta">9:36</span>
+        </div>
+        <p class="track-narrative">2023 04 13 centers begins with synthetic, setting a building tone. The mood holds steadily through 0:05: organic. A organ, plastic texture character emerges here. A sustained plateau settles at 0:07 — organic. A bit crushed, brass character emerges here. The mood holds steadily…</p>
+        <div class="track-tags"><span class="tag" style="border-color:#4FD1C5;color:#4FD1C5">synthetic ×14</span>
+<span class="tag" style="border-color:#27AE60;color:#5ecc8a">organic ×12</span>
+<span class="tag" style="border-color:#9B8FD4;color:#9B8FD4">spacey</span>
+</div>
+        <div class="track-similar">
+          <span class="similar-label">structurally similar &rarr;</span>
+          <a class="similar-chip" href="#2022-09-25-while-madeline-sleeps">2022-09-25 while madeline sleeps</a>
+<a class="similar-chip" href="#2022-12-14-a-quatrax-cosmos-memory">2022-12-14 a quatrax cosmos memory</a>
+<a class="similar-chip" href="#2021-12-20-chiminy-biscuits">2021 12 20 chiminy biscuits</a>
+
+        </div>
+      </div>
+      <div class="track-right">
+        <div class="track-stats">
+          <span><span class="sections-count">27</span> sections</span>
+          <div class="tension-meter">
+            <span class="tlabel">tension</span>
+            <div class="tension-track">
+              <div class="tension-fill" style="width:42%;background:#F4C471"></div>
+            </div>
+            <span class="tval" style="color:#F4C471">0.42</span>
+          </div>
+        </div>
+        <div class="sparkline-wrap">
+          <svg width="200" height="40" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="sg-2023-04-13-centers" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4FD1C5" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#4FD1C5" stop-opacity="0.15"/>
+            </linearGradient>
+          </defs>
+          <path d="M 0.0,35.5 L 2.1,14.8 L 4.3,19.0 L 6.4,19.1 L 8.5,16.9 L 10.6,19.6 L 12.8,19.6 L 14.9,16.3 L 17.0,18.1 L 19.2,21.3 L 21.3,15.3 L 23.4,13.5 L 25.5,15.2 L 27.7,14.4 L 29.8,15.0 L 31.9,16.3 L 34.0,13.9 L 36.2,16.4 L 38.3,19.9 L 40.4,17.3 L 42.6,18.1 L 44.7,20.2 L 46.8,23.3 L 48.9,20.0 L 51.1,20.4 L 53.2,23.4 L 55.3,21.2 L 57.4,21.2 L 59.6,20.7 L 61.7,19.8 L 63.8,19.8 L 66.0,20.4 L 68.1,20.0 L 70.2,20.4 L 72.3,19.6 L 74.5,15.1 L 76.6,20.9 L 78.7,21.0 L 80.9,20.6 L 83.0,22.5 L 85.1,22.5 L 87.2,24.5 L 89.4,24.8 L 91.5,25.7 L 93.6,28.1 L 95.7,27.8 L 97.9,26.1 L 100.0,29.6 L 102.1,27.4 L 104.3,27.4 L 106.4,29.6 L 108.5,27.9 L 110.6,28.4 L 112.8,29.4 L 114.9,28.7 L 117.0,28.8 L 119.2,29.8 L 121.3,28.0 L 123.4,29.7 L 125.5,30.7 L 127.7,29.9 L 129.8,30.7 L 131.9,30.7 L 134.0,32.0 L 136.2,31.2 L 138.3,31.4 L 140.4,32.9 L 142.6,32.1 L 144.7,30.7 L 146.8,33.4 L 148.9,31.9 L 151.1,30.7 L 153.2,31.7 L 155.3,31.0 L 157.4,30.9 L 159.6,31.0 L 161.7,31.4 L 163.8,30.4 L 166.0,31.9 L 168.1,32.0 L 170.2,29.9 L 172.3,32.3 L 174.5,32.1 L 176.6,32.2 L 178.7,32.3 L 180.9,33.0 L 183.0,32.3 L 185.1,32.0 L 187.2,33.3 L 189.4,32.1 L 191.5,31.4 L 193.6,32.5 L 195.7,31.8 L 197.9,31.4 L 200.0,32.4" fill="none" stroke="#4FD1C5" stroke-width="1.5" stroke-linejoin="round" opacity="0.7"/>
+        </svg>
+          <div class="tension-label">tension arc &rarr; time</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 </section>
 
-<!-- ─────────────────────────────── FOOTER ─────────────────────────────── -->
+<!-- next -->
+<section id="next">
+<div class="container">
+  <h2>What&rsquo;s next</h2>
+  <p class="section-sub">The STFT bottleneck moved. Now everything else shows up.</p>
+  <div class="next-grid">
+    <div class="next-card">
+      <h3>Multi-chip parallelism</h3>
+      <p>The P150X4 mesh has 4 Blackhole chips. Explicit device placement could run 4 chunks simultaneously &mdash; another 4x on top of per-chip speed, pushing STFT for 60&thinsp;min of audio under 0.25&thinsp;s.</p>
+    </div>
+    <div class="next-card">
+      <h3>Trajectory on hardware</h3>
+      <p>TrajectoryAnalyzer still runs on CPU. Per-window tension computations share the same matmul structure as STFT &mdash; a JIT-compiled trajectory kernel would make the full pipeline hardware-accelerated end to end.</p>
+    </div>
+    <div class="next-card">
+      <h3>Real-time streaming</h3>
+      <p>The chunk-streaming architecture was designed for this. With hardware STFT and fast trajectory, latency per 30-second chunk could drop below 10&thinsp;ms &mdash; enabling live analysis as audio is being performed or recorded.</p>
+    </div>
+    <div class="next-card">
+      <h3>Grow the pool</h3>
+      <p>The library has 8 pieces right now. With more music the similarity graph becomes genuinely informative, clustering finds real structure, and descriptor thresholds could be refined against a larger annotated set.</p>
+    </div>
+    <div class="next-card">
+      <h3>Similarity-driven sequencing</h3>
+      <p>The CrossPieceSimilarity graph gives structural neighbors. Feeding it into the SequenceRecommender so transitions favor structurally complementary pieces rather than only spectrally similar ones would produce more interesting playlists.</p>
+    </div>
+    <div class="next-card">
+      <h3>Online learning</h3>
+      <p>Mood descriptors and section thresholds are hand-tuned. A track could carry a manual annotation that updates the classifier&rsquo;s priors. Over 100+ annotated pieces, thresholds would reflect the actual composer&rsquo;s perception.</p>
+    </div>
+  </div>
+</div>
+</section>
+
 <footer>
-<div class="container" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; width:100%">
-  <span>analyze_synths &mdash; a composer's experiment in hardware-accelerated music analysis</span>
-  <span class="foot-mono" style="color:var(--text-mute); font-size:0.72rem">
-    Tenstorrent Blackhole &nbsp;/&nbsp; JAX PJRT &nbsp;/&nbsp; built 2025&ndash;2026
-  </span>
+<div class="container">
+  <div class="foot-inner">
+    <span>analyze_synths &mdash; a composer&rsquo;s experiment in hardware-accelerated music analysis</span>
+    <span class="foot-mono">Tenstorrent Blackhole &nbsp;/&nbsp; JAX PJRT &nbsp;/&nbsp; 2025&ndash;2026</span>
+  </div>
 </div>
 </footer>
 
-<script>
-// ── embedded data ─────────────────────────────────────────────────────────
-const TRACKS = {"2020 cricketeering.aif": {"duration_fmt": "6:18", "duration_s": 378, "sections": 14, "avg_tension": 0.302, "top_mood": "oozy", "mood_counts": {"oozy": 14}, "similar": ["2021 melody partially resolute tetrax.aif", "2022 09 17 caving in.aif", "2021 12 20 chiminy biscuits.aif"], "narrative": "A sustained plateau settles at 0:00 — oozy. The mood holds steadily through 0:57: oozy. A sustained plateau settles at 1:13 — oozy. The mood holds gradually through 1:54: oozy. A bit crushed, organic texture character emerges here. Around 2:04, the texture shifts — oozy as brightness rises. A arp synth, gaseous texture character emerges here.", "sparkline": "M 0.0,33.1 L 3.2,23.2 L 6.5,29.9 L 9.7,28.5 L 12.9,29.1 L 16.1,26.8 L 19.4,31.3 L 22.6,30.0 L 25.8,30.7 L 29.0,26.0 L 32.3,26.5 L 35.5,24.3 L 38.7,29.2 L 41.9,32.5 L 45.2,28.4 L 48.4,18.8 L 51.6,25.2 L 54.8,22.5 L 58.1,20.9 L 61.3,32.8 L 64.5,35.5 L 67.7,26.5 L 71.0,29.2 L 74.2,26.6 L 77.4,28.1 L 80.6,25.3 L 83.9,25.5 L 87.1,30.0 L 90.3,30.9 L 93.6,28.7 L 96.8,30.8 L 100.0,32.5 L 103.2,24.4 L 106.5,15.1 L 109.7,30.2 L 112.9,32.1 L 116.1,27.4 L 119.4,30.5 L 122.6,31.1 L 125.8,27.7 L 129.0,31.3 L 132.3,30.7 L 135.5,29.3 L 138.7,33.8 L 141.9,28.4 L 145.2,30.8 L 148.4,30.3 L 151.6,30.8 L 154.8,25.1 L 158.1,30.6 L 161.3,16.4 L 164.5,34.1 L 167.7,27.7 L 171.0,23.0 L 174.2,33.4 L 177.4,30.8 L 180.6,30.0 L 183.9,27.2 L 187.1,20.8 L 190.3,28.2 L 193.5,25.5 L 196.8,30.4 L 200.0,30.9"}, "2021 12 20 chiminy biscuits.aif": {"duration_fmt": "5:28", "duration_s": 328, "sections": 11, "avg_tension": 0.381, "top_mood": "oozy", "mood_counts": {"oozy": 10, "organic": 1}, "similar": ["2022-12-14 a quatrax cosmos memory.aif", "2021 melody partially resolute tetrax.aif", "2020 cricketeering.aif"], "narrative": "A sustained plateau settles at 0:00 — oozy. The mood holds steadily through 0:21: organic. A string machine, subtractive synth character emerges here. A sustained plateau settles at 0:23 — oozy. A chorused, flanged character emerges here. The mood holds steadily through 1:21: oozy. A waxy texture character emerges here.", "sparkline": "M 0.0,27.4 L 3.8,28.8 L 7.6,25.2 L 11.3,32.8 L 15.1,28.1 L 18.9,24.9 L 22.6,28.3 L 26.4,28.6 L 30.2,26.4 L 34.0,23.5 L 37.7,20.5 L 41.5,24.2 L 45.3,22.0 L 49.1,20.4 L 52.8,21.7 L 56.6,23.4 L 60.4,23.0 L 64.2,23.3 L 67.9,26.9 L 71.7,24.4 L 75.5,16.2 L 79.2,20.0 L 83.0,21.6 L 86.8,28.8 L 90.6,18.5 L 94.3,36.4 L 98.1,25.4 L 101.9,26.3 L 105.7,20.1 L 109.4,22.1 L 113.2,34.9 L 117.0,23.4 L 120.8,21.0 L 124.5,32.7 L 128.3,26.4 L 132.1,23.3 L 135.9,22.3 L 139.6,22.2 L 143.4,23.9 L 147.2,22.0 L 150.9,31.2 L 154.7,22.0 L 158.5,32.8 L 162.3,25.6 L 166.0,22.9 L 169.8,27.1 L 173.6,23.0 L 177.4,12.3 L 181.1,14.7 L 184.9,23.0 L 188.7,32.1 L 192.5,34.8 L 196.2,38.2 L 200.0,38.9"}, "2021 melody partially resolute tetrax.aif": {"duration_fmt": "2:32", "duration_s": 152, "sections": 7, "avg_tension": 0.288, "top_mood": "oozy", "mood_counts": {"oozy": 6, "organic": 1}, "similar": ["2020 cricketeering.aif", "2022 09 17 caving in.aif", "2021 12 20 chiminy biscuits.aif"], "narrative": "A sustained plateau settles at 0:00 — oozy. The mood holds steadily through 0:51: oozy. A sustained plateau settles at 1:05 — oozy. A bit crushed, mellotron character emerges here. The mood holds steadily through 1:07: organic. A bass synth character emerges here.", "sparkline": "M 0.0,24.7 L 8.3,30.4 L 16.7,28.2 L 25.0,28.7 L 33.3,28.9 L 41.7,31.6 L 50.0,32.5 L 58.3,29.2 L 66.7,33.2 L 75.0,24.7 L 83.3,31.1 L 91.7,20.6 L 100.0,32.1 L 108.3,27.4 L 116.7,11.0 L 125.0,27.0 L 133.3,28.3 L 141.7,28.8 L 150.0,31.6 L 158.3,31.6 L 166.7,28.1 L 175.0,33.4 L 183.3,32.6 L 191.7,27.9 L 200.0,28.5"}, "2022 06 05 negative 60.aif": {"duration_fmt": "4:12", "duration_s": 252, "sections": 11, "avg_tension": 0.243, "top_mood": "oozy", "mood_counts": {"oozy": 5, "organic": 3, "synthetic": 2, "spacey": 1}, "similar": ["2022 09 17 caving in.aif", "2022-09-25 while madeline sleeps.aif", "2023 04 13 centers.aif"], "narrative": "2022 06 05 negative 60 begins with oozy, setting a valley tone. The mood holds softly through 0:05: oozy. A acoustic instrument, distorted character emerges here. Around 0:07, the texture shifts — oozy as brightness rises. A arp synth, brass character emerges here. The mood holds softly through 0:15: oozy.", "sparkline": "M 0.0,30.0 L 4.9,36.9 L 9.8,31.2 L 14.6,31.4 L 19.5,36.2 L 24.4,33.6 L 29.3,34.4 L 34.2,35.2 L 39.0,34.4 L 43.9,33.5 L 48.8,32.0 L 53.7,33.9 L 58.5,31.2 L 63.4,31.4 L 68.3,32.8 L 73.2,28.9 L 78.1,29.6 L 82.9,30.5 L 87.8,27.3 L 92.7,27.0 L 97.6,23.1 L 102.4,23.6 L 107.3,21.7 L 112.2,19.4 L 117.1,19.9 L 121.9,19.0 L 126.8,15.9 L 131.7,15.0 L 136.6,15.1 L 141.5,21.7 L 146.3,22.8 L 151.2,22.0 L 156.1,21.1 L 161.0,21.5 L 165.9,22.0 L 170.7,23.9 L 175.6,26.5 L 180.5,26.0 L 185.4,28.9 L 190.2,32.3 L 195.1,28.7 L 200.0,32.0"}, "2022 09 17 caving in.aif": {"duration_fmt": "9:28", "duration_s": 568, "sections": 25, "avg_tension": 0.242, "top_mood": "crystalline", "mood_counts": {"crystalline": 13, "organic": 4, "chaos": 2, "pensive": 2}, "similar": ["2021 melody partially resolute tetrax.aif", "2020 cricketeering.aif", "2021 12 20 chiminy biscuits.aif"], "narrative": "2022 09 17 caving in begins with crystalline, setting a valley tone. The mood holds softly through 0:33: chaos. A am synth, bass synth character emerges here. A sustained plateau settles at 0:35 — crystalline. A choir, chorused character emerges here. The mood holds softly through 0:53: crystalline. A flanged, granular synth character emerges here.", "sparkline": "M 0.0,38.0 L 2.2,35.5 L 4.3,36.6 L 6.5,36.4 L 8.6,31.6 L 10.8,36.8 L 12.9,31.8 L 15.1,31.5 L 17.2,35.8 L 19.4,34.7 L 21.5,34.9 L 23.7,36.1 L 25.8,34.6 L 28.0,33.6 L 30.1,33.9 L 32.3,31.8 L 34.4,29.8 L 36.6,31.9 L 38.7,27.7 L 40.9,29.5 L 43.0,27.9 L 45.2,29.0 L 47.3,29.4 L 49.5,28.3 L 51.6,28.2 L 53.8,29.7 L 55.9,29.9 L 58.1,28.9 L 60.2,31.2 L 62.4,31.9 L 64.5,30.5 L 66.7,30.0 L 68.8,30.9 L 71.0,29.3 L 73.1,27.7 L 75.3,29.7 L 77.4,30.2 L 79.6,32.3 L 81.7,34.2 L 83.9,32.6 L 86.0,33.7 L 88.2,34.8 L 90.3,35.2 L 92.5,33.0 L 94.6,33.4 L 96.8,34.3 L 98.9,32.1 L 101.1,32.1 L 103.2,30.5 L 105.4,28.5 L 107.5,31.3 L 109.7,30.5 L 111.8,27.5 L 114.0,29.6 L 116.1,35.9 L 118.3,34.6 L 120.4,35.0 L 122.6,31.7 L 124.7,26.7 L 126.9,33.3 L 129.0,31.6 L 131.2,29.6 L 133.3,32.5 L 135.5,23.8 L 137.6,23.4 L 139.8,17.5 L 141.9,21.3 L 144.1,31.0 L 146.2,28.9 L 148.4,24.4 L 150.5,34.4 L 152.7,23.8 L 154.8,17.4 L 157.0,23.2 L 159.1,22.1 L 161.3,16.9 L 163.4,19.3 L 165.6,34.1 L 167.7,31.8 L 169.9,33.8 L 172.0,35.9 L 174.2,33.5 L 176.3,27.4 L 178.5,35.6 L 180.6,26.4 L 182.8,26.0 L 184.9,29.7 L 187.1,30.9 L 189.2,28.8 L 191.4,34.4 L 193.5,33.4 L 195.7,27.5 L 197.8,34.2 L 200.0,34.1"}, "2022-09-25 while madeline sleeps.aif": {"duration_fmt": "10:42", "duration_s": 642, "sections": 29, "avg_tension": 0.361, "top_mood": "organic", "mood_counts": {"organic": 7, "exuberant": 7, "tense": 7, "synthetic": 3}, "similar": ["2022-12-14 a quatrax cosmos memory.aif", "2023 04 13 centers.aif", "2021 12 20 chiminy biscuits.aif"], "narrative": "2022-09-25 while madeline sleeps begins with oozy, setting a valley tone. The mood holds softly through 0:59: organic. A sustained plateau settles at 1:01 — exuberant. The mood holds gradually through 2:00: organic. A sustained plateau settles at 2:08 — organic. A woodwind character emerges here.", "sparkline": "M 0.0,32.0 L 1.9,36.8 L 3.8,38.1 L 5.7,34.3 L 7.6,33.2 L 9.5,33.4 L 11.4,36.2 L 13.3,35.2 L 15.2,33.4 L 17.1,33.2 L 19.0,35.5 L 21.0,31.6 L 22.9,31.3 L 24.8,29.9 L 26.7,25.9 L 28.6,27.3 L 30.5,28.0 L 32.4,26.0 L 34.3,28.9 L 36.2,27.8 L 38.1,32.5 L 40.0,28.0 L 41.9,32.8 L 43.8,32.9 L 45.7,30.3 L 47.6,28.7 L 49.5,32.6 L 51.4,30.8 L 53.3,28.8 L 55.2,27.1 L 57.1,23.8 L 59.1,26.9 L 61.0,23.7 L 62.9,24.2 L 64.8,18.4 L 66.7,26.8 L 68.6,28.4 L 70.5,25.7 L 72.4,27.5 L 74.3,29.0 L 76.2,25.1 L 78.1,28.0 L 80.0,27.5 L 81.9,27.9 L 83.8,27.0 L 85.7,24.1 L 87.6,24.1 L 89.5,20.4 L 91.4,19.0 L 93.3,20.7 L 95.2,17.0 L 97.1,19.2 L 99.0,22.8 L 101.0,20.2 L 102.9,19.1 L 104.8,22.4 L 106.7,18.5 L 108.6,21.7 L 110.5,24.6 L 112.4,22.0 L 114.3,22.2 L 116.2,19.4 L 118.1,17.9 L 120.0,17.4 L 121.9,15.9 L 123.8,20.1 L 125.7,24.3 L 127.6,17.8 L 129.5,22.6 L 131.4,25.3 L 133.3,25.0 L 135.2,24.9 L 137.1,25.4 L 139.0,27.0 L 141.0,25.3 L 142.9,27.9 L 144.8,28.4 L 146.7,29.6 L 148.6,21.0 L 150.5,20.4 L 152.4,21.3 L 154.3,20.0 L 156.2,21.3 L 158.1,22.5 L 160.0,16.9 L 161.9,24.6 L 163.8,24.7 L 165.7,22.2 L 167.6,30.9 L 169.5,27.4 L 171.4,29.4 L 173.3,29.8 L 175.2,30.7 L 177.1,29.3 L 179.0,30.2 L 181.0,32.7 L 182.9,31.2 L 184.8,31.5 L 186.7,31.2 L 188.6,34.2 L 190.5,32.0 L 192.4,34.3 L 194.3,34.5 L 196.2,33.6 L 198.1,32.6 L 200.0,37.4"}, "2022-12-14 a quatrax cosmos memory.aif": {"duration_fmt": "11:32", "duration_s": 692, "sections": 33, "avg_tension": 0.375, "top_mood": "organic", "mood_counts": {"organic": 12, "synthetic": 8, "driving": 6, "exuberant": 3}, "similar": ["2022-09-25 while madeline sleeps.aif", "2021 12 20 chiminy biscuits.aif", "2023 04 13 centers.aif"], "narrative": "A sustained plateau settles at 0:00 — organic. The mood holds steadily through 0:01: organic. A organic texture, phased character emerges here. A sustained plateau settles at 0:03 — organic. The mood holds steadily through 0:41: organic. A bass synth, digital synth character emerges here.", "sparkline": "M 0.0,27.6 L 1.8,28.2 L 3.5,22.3 L 5.3,25.6 L 7.0,21.7 L 8.8,25.6 L 10.5,24.4 L 12.3,29.2 L 14.0,26.7 L 15.8,29.8 L 17.6,29.7 L 19.3,25.7 L 21.1,25.0 L 22.8,25.2 L 24.6,26.4 L 26.3,29.9 L 28.1,28.9 L 29.8,23.0 L 31.6,25.7 L 33.4,26.1 L 35.1,23.2 L 36.9,21.7 L 38.6,24.3 L 40.4,24.0 L 42.1,23.5 L 43.9,21.3 L 45.6,16.3 L 47.4,18.7 L 49.2,23.0 L 50.9,13.9 L 52.7,23.8 L 54.4,26.2 L 56.2,28.7 L 57.9,29.7 L 59.7,15.5 L 61.4,16.4 L 63.2,21.9 L 65.0,21.5 L 66.7,19.1 L 68.5,30.0 L 70.2,27.1 L 72.0,24.1 L 73.7,23.6 L 75.5,23.1 L 77.2,18.2 L 79.0,21.3 L 80.8,23.4 L 82.5,24.4 L 84.3,22.1 L 86.0,23.8 L 87.8,24.2 L 89.5,26.9 L 91.3,23.0 L 93.0,26.0 L 94.8,26.8 L 96.6,25.8 L 98.3,27.4 L 100.1,27.7 L 101.8,16.5 L 103.6,23.7 L 105.3,27.5 L 107.1,29.2 L 108.8,25.6 L 110.6,29.1 L 112.4,28.1 L 114.1,33.2 L 115.9,27.5 L 117.6,28.9 L 119.4,31.7 L 121.1,29.1 L 122.9,31.3 L 124.6,27.6 L 126.4,28.6 L 128.2,27.8 L 129.9,29.0 L 131.7,29.3 L 133.4,26.9 L 135.2,32.9 L 136.9,26.4 L 138.7,24.6 L 140.4,26.6 L 142.2,17.0 L 144.0,29.6 L 145.7,18.5 L 147.5,13.3 L 149.2,20.5 L 151.0,20.3 L 152.7,23.8 L 154.5,14.4 L 156.3,18.7 L 158.0,24.2 L 159.8,25.5 L 161.5,22.1 L 163.3,20.4 L 165.0,26.4 L 166.8,29.3 L 168.5,13.5 L 170.3,28.1 L 172.1,15.1 L 173.8,19.4 L 175.6,28.4 L 177.3,20.3 L 179.1,23.3 L 180.8,19.2 L 182.6,20.7 L 184.3,29.0 L 186.1,31.0 L 187.9,32.7 L 189.6,28.8 L 191.4,27.3 L 193.1,23.7 L 194.9,31.3 L 196.6,34.8 L 198.4,32.4 L 200.0,32.8"}, "2023 04 13 centers.aif": {"duration_fmt": "9:36", "duration_s": 576, "sections": 27, "avg_tension": 0.422, "top_mood": "synthetic", "mood_counts": {"synthetic": 14, "organic": 12, "spacey": 1}, "similar": ["2022-09-25 while madeline sleeps.aif", "2022-12-14 a quatrax cosmos memory.aif", "2021 12 20 chiminy biscuits.aif"], "narrative": "2023 04 13 centers begins with synthetic, setting a building tone. The mood holds steadily through 0:05: organic. A organ, plastic texture character emerges here. A sustained plateau settles at 0:07 — organic. A bit crushed, brass character emerges here. The mood holds steadily through 0:59: organic. A flanged character emerges here.", "sparkline": "M 0.0,35.5 L 2.1,14.8 L 4.3,19.0 L 6.4,19.1 L 8.5,16.9 L 10.6,19.6 L 12.8,19.6 L 14.9,16.3 L 17.0,18.1 L 19.2,21.3 L 21.3,15.3 L 23.4,13.5 L 25.5,15.2 L 27.7,14.4 L 29.8,15.0 L 31.9,16.3 L 34.0,13.9 L 36.2,16.4 L 38.3,19.9 L 40.4,17.3 L 42.6,18.1 L 44.7,20.2 L 46.8,23.3 L 48.9,20.0 L 51.1,20.4 L 53.2,23.4 L 55.3,21.2 L 57.4,21.2 L 59.6,20.7 L 61.7,19.8 L 63.8,19.8 L 66.0,20.4 L 68.1,20.0 L 70.2,20.4 L 72.3,19.6 L 74.5,15.1 L 76.6,20.9 L 78.7,21.0 L 80.9,20.6 L 83.0,22.5 L 85.1,22.5 L 87.2,24.5 L 89.4,24.8 L 91.5,25.7 L 93.6,28.1 L 95.7,27.8 L 97.9,26.1 L 100.0,29.6 L 102.1,27.4 L 104.3,27.4 L 106.4,29.6 L 108.5,27.9 L 110.6,28.4 L 112.8,29.4 L 114.9,28.7 L 117.0,28.8 L 119.2,29.8 L 121.3,28.0 L 123.4,29.7 L 125.5,30.7 L 127.7,29.9 L 129.8,30.7 L 131.9,30.7 L 134.0,32.0 L 136.2,31.2 L 138.3,31.4 L 140.4,32.9 L 142.6,32.1 L 144.7,30.7 L 146.8,33.4 L 148.9,31.9 L 151.1,30.7 L 153.2,31.7 L 155.3,31.0 L 157.4,30.9 L 159.6,31.0 L 161.7,31.4 L 163.8,30.4 L 166.0,31.9 L 168.1,32.0 L 170.2,29.9 L 172.3,32.3 L 174.5,32.1 L 176.6,32.2 L 178.7,32.3 L 180.9,33.0 L 183.0,32.3 L 185.1,32.0 L 187.2,33.3 L 189.4,32.1 L 191.5,31.4 L 193.6,32.5 L 195.7,31.8 L 197.9,31.4 L 200.0,32.4"}};
-
-const BENCH_DATA = [
-  { file: '2020 cricketeering',                  dur: '6:18',  hw: '0.10 s', rtf: 3693 },
-  { file: '2021 12 20 chiminy biscuits',          dur: '5:28',  hw: '0.08 s', rtf: 4013 },
-  { file: '2021 melody partially resolute tetrax',dur: '2:32',  hw: '0.04 s', rtf: 3497 },
-  { file: '2022 06 05 negative 60',               dur: '4:12',  hw: '0.06 s', rtf: 3880 },
-  { file: '2022 09 17 caving in',                 dur: '9:28',  hw: '0.14 s', rtf: 4074 },
-  { file: '2022-09-25 while madeline sleeps',     dur: '10:42', hw: '0.16 s', rtf: 3997 },
-  { file: '2022-12-14 a quatrax cosmos memory',   dur: '11:32', hw: '0.18 s', rtf: 3941 },
-  { file: '2023 04 13 centers',                   dur: '9:36',  hw: '0.14 s', rtf: 3983 },
-];
-
-// ── Mood colours ────────────────────────────────────────────────────────────
-const MOOD_STYLE = {
-  oozy:        { bg: 'rgba(96,125,139,0.18)',  border: '#607D8B', color: '#90AAB8' },
-  organic:     { bg: 'rgba(39,174,96,0.15)',   border: '#27AE60', color: '#5ecc8a' },
-  crystalline: { bg: 'rgba(129,230,217,0.12)', border: '#4FD1C5', color: '#81E6D9' },
-  synthetic:   { bg: 'rgba(79,209,197,0.12)',  border: '#4FD1C5', color: '#4FD1C5' },
-  exuberant:   { bg: 'rgba(244,196,113,0.15)', border: '#F4C471', color: '#F4C471' },
-  tense:       { bg: 'rgba(255,107,107,0.13)', border: '#FF6B6B', color: '#FF6B6B' },
-  chaos:       { bg: 'rgba(236,150,184,0.15)', border: '#EC96B8', color: '#EC96B8' },
-  pensive:     { bg: 'rgba(176,196,222,0.15)', border: '#B0C4DE', color: '#B0C4DE' },
-  spacey:      { bg: 'rgba(155,143,212,0.15)', border: '#9B8FD4', color: '#9B8FD4' },
-  driving:     { bg: 'rgba(230,181,94,0.15)',  border: '#E6B55E', color: '#E6B55E' },
-  droning:     { bg: 'rgba(96,125,139,0.18)',  border: '#607D8B', color: '#90AAB8' },
-};
-function moodStyle(m) {
-  return MOOD_STYLE[m] || { bg: 'rgba(60,90,100,0.15)', border: '#3d6070', color: '#7a9aaa' };
-}
-
-// ── Benchmark table ──────────────────────────────────────────────────────────
-const maxRtf = Math.max(...BENCH_DATA.map(r => r.rtf));
-const tbody = document.getElementById('bench-tbody');
-BENCH_DATA.forEach(r => {
-  const tr = document.createElement('tr');
-  const barW = Math.round((r.rtf / maxRtf) * 80);
-  tr.innerHTML = `
-    <td class="filename">${r.file}</td>
-    <td class="hw-time" style="font-family:var(--mono); color:var(--text-dim)">${r.dur}</td>
-    <td class="hw-time" style="font-family:var(--mono)">${r.hw}</td>
-    <td>
-      <div class="rtf-bar-row">
-        <span class="rtf">${r.rtf.toLocaleString()}x</span>
-        <div class="rtf-bar" style="width:${barW}px"></div>
-      </div>
-    </td>`;
-  tbody.appendChild(tr);
-});
-// totals row
-const tot = document.createElement('tr');
-tot.className = 'bench-total';
-tot.innerHTML = `<td>total (8 files)</td><td style="font-family:var(--mono);color:var(--teal-text)">59:48</td><td style="font-family:var(--mono);color:var(--teal-text)">0.9 s</td><td style="font-family:var(--mono);color:var(--teal-text)">3,931x avg</td>`;
-tbody.appendChild(tot);
-
-// ── Library cards ────────────────────────────────────────────────────────────
-function titleFromKey(k) {
-  return k.replace(/\.aif$/, '');
-}
-
-function truncate(text, maxLen) {
-  if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen).replace(/\s\S*$/, '') + '…';
-}
-
-function scrollTo(title) {
-  // Scroll to a track card by its title
-  const cards = document.querySelectorAll('.track-card');
-  for (const card of cards) {
-    const h = card.querySelector('.track-title');
-    if (h && h.textContent.includes(title.replace(/\.aif$/,''))) {
-      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      card.style.outline = '1px solid var(--teal)';
-      setTimeout(() => { card.style.outline = ''; }, 1500);
-      break;
-    }
-  }
-}
-
-const grid = document.getElementById('library-grid');
-Object.entries(TRACKS).forEach(([fname, d]) => {
-  const title = titleFromKey(fname);
-  const s = moodStyle(d.top_mood);
-
-  // Mood tags
-  const tagHtml = Object.entries(d.mood_counts)
-    .sort((a,b) => b[1]-a[1])
-    .map(([mood, count]) => {
-      const ms = moodStyle(mood);
-      return `<span class="tag" style="background:${ms.bg};border-color:${ms.border};color:${ms.color}">${mood}${count>1?` ×${count}`:''}</span>`;
-    }).join('');
-
-  // Similar chips
-  const simHtml = d.similar.map(s => {
-    const n = titleFromKey(s);
-    return `<span class="similar-chip" onclick="scrollTo('${n.replace(/'/g,"\\'")}')">&#8599; ${n}</span>`;
-  }).join('');
-
-  // Tension bar
-  const tensionPct = Math.round(d.avg_tension * 100);
-  const tensionColor = d.avg_tension > 0.4 ? 'var(--yellow)' : d.avg_tension > 0.32 ? 'var(--teal)' : 'var(--text-mute)';
-
-  const card = document.createElement('div');
-  card.className = 'track-card';
-  card.innerHTML = `
-    <div class="track-left">
-      <div class="track-header">
-        <span class="track-title">${title}</span>
-        <span class="track-meta">${d.duration_fmt}</span>
-      </div>
-      <div class="track-narrative">${truncate(d.narrative, 260)}</div>
-      <div class="track-tags">${tagHtml}</div>
-      <div class="track-similar">
-        <span class="similar-label">structurally similar &rarr;</span>
-        ${simHtml}
-      </div>
-    </div>
-    <div class="track-right">
-      <div class="track-stats">
-        <span><span class="sections-count">${d.sections}</span> sections</span>
-        <div class="tension-meter" style="justify-content:flex-end">
-          <span style="color:var(--text-mute);font-size:0.7rem">tension</span>
-          <div class="tension-track">
-            <div class="tension-fill" style="width:${tensionPct}%;background:${tensionColor}"></div>
-          </div>
-          <span style="font-family:var(--mono);font-size:0.7rem;color:${tensionColor}">${(d.avg_tension).toFixed(2)}</span>
-        </div>
-      </div>
-      <div class="sparkline-wrap">
-        <svg width="200" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
-          <defs>
-            <linearGradient id="sg-${title.replace(/\s/g,'_')}" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="var(--teal)" stop-opacity="0.9"/>
-              <stop offset="100%" stop-color="var(--teal)" stop-opacity="0.2"/>
-            </linearGradient>
-          </defs>
-          <path d="${d.sparkline}" fill="none" stroke="var(--teal)" stroke-width="1.5" stroke-linejoin="round" opacity="0.7"/>
-        </svg>
-        <div class="tension-label">tension arc &rarr; time</div>
-      </div>
-    </div>`;
-  grid.appendChild(card);
-});
-</script>
 </body>
 </html>
