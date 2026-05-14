@@ -723,10 +723,13 @@ class ParallelAudioAnalyzer:
         report_paths = {}
         
         # Generate comprehensive markdown report
+        # Pass narrative_results so the report includes a Temporal Narrative
+        # section when narrative analysis has been performed.
         markdown_path = reports_dir / "comprehensive_analysis_report.md"
         self.markdown_exporter.generate_comprehensive_report(
-            self.df, self.phase_data, self.cluster_analysis, 
-            self.sequence_recommendations, markdown_path
+            self.df, self.phase_data, self.cluster_analysis,
+            self.sequence_recommendations, markdown_path,
+            narrative_results=self.narrative_results if self.narrative_results else None,
         )
         report_paths['comprehensive_report'] = str(markdown_path)
         
